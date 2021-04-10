@@ -12,6 +12,7 @@ window.onload = function() {
 
 
 const updateAndDisplayCookieViewCount = function() {
+    const Cookies = window.Cookies;
     let viewCount;
     try {
         viewCount = parseInt(Cookies.get(VIEW_COUNT_COOKIE_NAME));
