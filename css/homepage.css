@@ -1,0 +1,28 @@
+.main-container {
+    width: 70%;
+    margin: auto;
+}
+
+/* Start faded out with a Y offset (downwards). */
+
+.start-faded-out {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.5s;
+    transition-timing-function: cubic-bezier(0, 0, .58, 1);
+}
+
+.loaded {
+    opacity: 1;
+    transform: translateY(0px);
+}
+
+.loaded.first-loaded {
+    transition-delay: 0.2s;
+}
+
+.loaded.second-loaded {
+    opacity: 1;
+    transform: translateY(0px);
+    transition-delay: 1.2s;
+}
