@@ -1,17 +1,22 @@
 {
-  "name": " ",
+  "name": "liujason-site",
   "version": "0.0.1",
   "description": "",
-  "keywords": "",
+  "keywords": [],
   "license": "",
-  "author": "",
+  "author": "zonrup",
   "scripts": {
     "build": "parcel build index.html",
+    "build-prod": "parcel build index.html --dist-dir ./prod",
     "dev": "parcel index.html --open",
     "start": "npm run build && npm run dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "dependencies": {
+    "parcel": "^2.0.0-beta.2"
+  },
   "devDependencies": {
-    "parcel-bundler": "^1.12.4"
+    "@parcel/packager-raw-url": "^2.0.0-beta.2",
+    "@parcel/transformer-webmanifest": "^2.0.0-beta.2"
   }
 }
