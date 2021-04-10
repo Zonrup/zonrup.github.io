@@ -1,3 +1,5 @@
+import Cookies from 'js-cookie';
+
 const VIEW_COUNT_COOKIE_NAME = "indexViewCount";
 const VIEW_COUNT_ELEM_ID = VIEW_COUNT_COOKIE_NAME;
 
@@ -12,7 +14,6 @@ window.onload = function() {
 
 
 const updateAndDisplayCookieViewCount = function() {
-    const Cookies = window.Cookies;
     let viewCount;
     try {
         viewCount = parseInt(Cookies.get(VIEW_COUNT_COOKIE_NAME));
