@@ -29,11 +29,17 @@ h1{
 }
 
 /* Start faded out with a Y offset (downwards). */
-
-.start-faded-out {
+.start-faded-out-down {
     opacity: 0;
     transform: translateY(10px);
     transition: all 0.5s;
+    transition-timing-function: cubic-bezier(0, 0, .58, 1);
+}
+
+.start-faded-out {
+    opacity: 0;
+    transition: all 0.5s;
+    transition-delay: 2.2s;
     transition-timing-function: cubic-bezier(0, 0, .58, 1);
 }
 
@@ -56,4 +62,54 @@ h1{
     opacity: 1;
     transform: translateY(0px);
     transition-delay: 2.2s;
+}
+
+.footer {
+    bottom: 5%;
+    right: 5%;
+    margin: 0 auto;
+    position: fixed;
+
+    background: rgba( 255, 255, 255, 0.25 );
+    box-shadow: 0 8px 32px 0 rgba( 31, 38, 135, 0.37 );
+    backdrop-filter: blur( 4px );
+    -webkit-backdrop-filter: blur( 4px );
+    border-radius: 10px;
+    border: 1px solid rgba( 255, 255, 255, 0.18 );
+}
+
+.indexViewCount {
+    margin: 10px;
+}
+
+.draggable-text-box {
+    position: absolute;
+    left: 50%;
+    z-index: 10;
+
+    background: rgba( 255, 255, 255, 0.25 );
+    box-shadow: 0 8px 32px 0 rgba( 31, 38, 135, 0.37 );
+    backdrop-filter: blur( 2px );
+    -webkit-backdrop-filter: blur( 2px );
+    border-radius: 10px;
+    border: 1px solid rgba( 255, 255, 255, 0.18 );
+
+    opacity: 0;
+}
+.loaded.draggable-text-box {
+    opacity: 1;
+}
+
+.draggable-text-box-inner-text {
+    -webkit-user-select: none; /* Safari */        
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* IE10+/Edge */
+    user-select: none; /* Standard */
+    width: 200px;
+    text-align: center;
+
+    margin-top: 100px;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-bottom: 100px;
 }

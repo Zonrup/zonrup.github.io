@@ -14,8 +14,7 @@
 
   <link rel="manifest" href="./site.webmanifest">
   <link rel="apple-touch-icon" href="./icon.png">
-  <!-- Place favicon.ico in the root directory -->
-  <link rel="shortcut icon" href="favicon.ico"/>
+  <link rel="shortcut icon" href="./favicon.ico"/>
   <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300&display=swap" rel="stylesheet">
 
@@ -31,17 +30,28 @@
   <img class="background" src="./img/mendocino.jpg"/>
 
   <div class="main-container">
-    <h1 class="onload start-faded-out first-loaded">Hi!</h1>
+    <h1 class="onload start-faded-out-down first-loaded">Hi!</h1>
     <br/>
-    <h2 class="onload start-faded-out second-loaded">This is Jason's website.</h2>
+    <h2 class="onload start-faded-out-down second-loaded">This is Jason's website.</h2>
     <br/>
-    <p class="onload start-faded-out third-loaded">Nothing to see here yet.</p>
+    <p class="onload start-faded-out-down third-loaded">Nothing to see here yet.</p>
+
   </div>
 
+  <div id="draggable-text-box" class="onload start-faded-out draggable-text-box">
+    <p class="draggable-text-box-inner-text">This can be moved.</p>
+  </div>
+  <div class="footer onload start-faded-out third-loaded">
+    <p id="indexViewCount" class="indexViewCount"></p>
+  </div>
+
+  <!-- js-cookie -->
+  <script type="module" src="./js/cookie/js.cookie.js"></script>
+  <script nomodule defer src="./js/cookie/js.cookie.js"></script>
 
   <script src="./js/vendor/modernizr-3.11.2.min.js"></script>
   <script src="./js/plugins.js"></script>
-  <script src="./js/main.js"></script>
+  <script type="module" src="./js/main.js"></script>
 </body>
 
 </html>
