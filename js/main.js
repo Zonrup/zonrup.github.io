@@ -1,4 +1,4 @@
-import Cookies from './cookie/js.cookie.js';
+import Cookies from './cookie/js.cookie';
 
 const VIEW_COUNT_COOKIE_NAME = "indexViewCount";
 const VIEW_COUNT_ELEM_ID = VIEW_COUNT_COOKIE_NAME;
