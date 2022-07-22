@@ -27,7 +27,8 @@ const updateAndDisplayCookieViewCount = function() {
         // Saturate at max safe integer.
         viewCount = Number.isSafeInteger(viewCount + 1) ? viewCount + 1 : viewCount;
     }
-    Cookies.set(VIEW_COUNT_COOKIE_NAME, viewCount);
+    // expire after a year just because, why not.
+    Cookies.set(VIEW_COUNT_COOKIE_NAME, viewCount, {'expires': new Date(new Date().setFullYear(new Date().getFullYear() + 1))});
 
     document.getElementById(VIEW_COUNT_ELEM_ID).innerHTML = `You've visited this page ${viewCount.toString()} times`;
 };
