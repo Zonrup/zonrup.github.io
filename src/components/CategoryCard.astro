@@ -1,0 +1,72 @@
+---
+interface Props {
+  title: string;
+  icon: string;
+  description: string;
+  href: string;
+  delay: number; // in seconds
+}
+
+const { title, icon, description, href, delay } = Astro.props;
+---
+
+<a class="card" href={href} style={`--delay: ${delay}s`}>
+  <div class="card-inner">
+    <span class="card-icon">{icon}</span>
+    <h2 class="card-title">{title}</h2>
+    <p class="card-description">{description}</p>
+  </div>
+</a>
+
+<style>
+  .card {
+    position: relative;
+    border-radius: 16px;
+    text-decoration: none;
+    color: inherit;
+    opacity: 0;
+    animation: card-unhide 0s forwards;
+    animation-delay: var(--delay);
+    transition:
+      box-shadow 0.1s ease,
+      transform 0.1s ease;
+  }
+
+  @keyframes card-unhide {
+    to { opacity: 1; }
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow:
+      0 6px 12px rgba(0, 0, 0, 0.08),
+      0 12px 28px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Animation now lives on card-inner, leaving card free for hover */
+  .card-inner {
+    padding: 2rem;
+    border-radius: 16px;
+    background: white;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.06),
+      0 4px 12px rgba(0, 0, 0, 0.08);
+    opacity: 0;
+    transform: translateY(8px);
+    animation: card-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes card-rise {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0px);
+    }
+  }
+</style>

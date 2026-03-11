@@ -1,0 +1,55 @@
+---
+interface Props {
+  text: string;
+  delay: number; // in seconds
+}
+
+const { text, delay } = Astro.props;
+---
+
+<p class="redacted-line" style={`--delay: ${delay}s`}>
+  {text}
+</p>
+
+<style>
+  .redacted-line {
+    position: relative;
+    display: table;
+    margin: 0;
+    opacity: 1;
+    color: transparent;
+    animation: text-appear 0s forwards;
+    animation-delay: calc(var(--delay) + 0.3s);
+  }
+
+  .redacted-line::after {
+    content: "";
+    position: absolute;
+    inset: -2px -6px;
+    border-radius: 4px;
+    background: black;
+    clip-path: inset(0 0% 0 0);
+    opacity: 0;
+    animation:
+        bar-appear 0.3s ease-out forwards,
+        bar-reveal 0.4s ease-in forwards;
+    animation-delay:
+        var(--delay),
+        calc(var(--delay) + 0.5s);  /* start reveal right after appear finishes */
+  }
+
+  @keyframes text-appear {
+    0%   { color: transparent; }
+    100% { color: black; }
+  }
+
+  @keyframes bar-appear {
+    from { opacity: 1; clip-path: polygon(-12% 0, -10% 0, -10% 100%, -12% 100%); }
+    to   { opacity: 1; clip-path: polygon(-12% 0, 112% 0, 112% 100%, -12% 100%); }
+  }
+
+  @keyframes bar-reveal {
+    from { clip-path: polygon(0 0, 112% 0, 110% 100%, 0 100%); }
+    to   { clip-path: polygon(120% 0, 132% 0, 130% 100%, 120% 100%); }
+  }
+</style>

@@ -1,0 +1,58 @@
+---
+// src/components/LeftNav.astro
+const navLinks = [
+  { href: "/", label: "Home" },
+  { href: "/resume", label: "Resume" },
+  { href: "/projects", label: "Projects" },
+];
+
+const { pathname } = Astro.url;
+---
+
+<nav class="left-nav">
+  <ul>
+    {navLinks.map(link => (
+      <li>
+        <a href={link.href}
+          class={pathname === link.href ? "active" : ""}
+        >
+          {link.label}
+        </a>
+      </li>
+    ))}
+  </ul>
+</nav>
+
+<style>
+  .left-nav {
+    width: 200px;
+    padding: 1rem;
+    
+    font-family: "Google Sans Flex", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 300;
+    // font-style: bold;
+    font-variation-settings:
+      "slnt" 0,
+      "wdth" 100,
+      "GRAD" 0,
+      "ROND" 0;
+  }
+
+  .left-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .left-nav a {
+    display: block;
+    padding: 0.5rem 0;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .left-nav a.active {
+    font-weight: bold;
+  }
+</style>
