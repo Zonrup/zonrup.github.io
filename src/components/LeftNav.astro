@@ -11,15 +11,15 @@ const { pathname } = Astro.url;
 
 <nav class="left-nav">
   <ul>
-    {navLinks.map(link => (
-      <li>
-        <a href={link.href}
-          class={pathname === link.href ? "active" : ""}
-        >
-          {link.label}
-        </a>
-      </li>
-    ))}
+    {
+      navLinks.map((link) => (
+        <li>
+          <a href={link.href} class={pathname === link.href ? "active" : ""}>
+            {link.label}
+          </a>
+        </li>
+      ))
+    }
   </ul>
 </nav>
 
@@ -27,16 +27,12 @@ const { pathname } = Astro.url;
   .left-nav {
     width: 200px;
     padding: 1rem;
-    
+
     font-family: "Google Sans Flex", sans-serif;
     font-optical-sizing: auto;
     font-weight: 300;
     // font-style: bold;
-    font-variation-settings:
-      "slnt" 0,
-      "wdth" 100,
-      "GRAD" 0,
-      "ROND" 0;
+    font-variation-settings: "slnt" 0, "wdth" 100, "GRAD" 0, "ROND" 0;
   }
 
   .left-nav ul {

@@ -1,45 +1,61 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import HomeLayout from '../layouts/HomeLayout.astro';
+import HomeLayout from "../layouts/HomeLayout.astro";
 import RedactedLine from "../components/RedactedLine.astro";
 import CategoryCard from "../components/CategoryCard.astro";
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
-
-
-
 const lines = [
-  { text: "Software Engineer, from Vancouver, living in the Bay Area.", delay: 0.2 },
+  {
+    text: "Software Engineer, from Vancouver, living in the Bay Area.",
+    delay: 0.2,
+  },
   { text: "This is my personal website.", delay: 0.4 },
   { text: "Here's some more stuff about me.", delay: 0.6 },
 ];
 
 const cards = [
-  { title: "Resume",   icon: "📄", description: "My background and work experience.", href: "/resume",   delay: 0.8 },
-  { title: "Projects", icon: "🛠️", description: "Things I've built.",                 href: "/projects", delay: 0.9 },
-  { title: "Hobbies",  icon: "🎸", description: "What I get up to outside of work.",  href: "/hobbies",  delay: 1 },
+  {
+    title: "Resume",
+    icon: "📄",
+    description: "My background and work experience.",
+    href: "/resume",
+    delay: 0.8,
+  },
+  {
+    title: "Projects",
+    icon: "🛠️",
+    description: "Things I've built.",
+    href: "/projects",
+    delay: 0.9,
+  },
+  {
+    title: "Hobbies",
+    icon: "🎸",
+    description: "What I get up to outside of work.",
+    href: "/hobbies",
+    delay: 1,
+  },
 ];
 ---
-
 
 <HomeLayout title="Home">
   <div class="hero">
     <h1>Jason Liu</h1>
     <div class="lines">
-      {lines.map(l => <RedactedLine text={l.text} delay={l.delay} />)}
+      {lines.map((l) => <RedactedLine text={l.text} delay={l.delay} />)}
     </div>
   </div>
 
   <section class="cards-section">
     <div class="cards-grid">
-      {cards.map(c => <CategoryCard {...c} />)}
+      {cards.map((c) => <CategoryCard {...c} />)}
     </div>
   </section>
 </HomeLayout>
 
 <style>
-  .hero h1 { margin-bottom: 1.5rem; }
+  .hero h1 {
+    margin-bottom: 1.5rem;
+  }
 
   .lines {
     display: flex;

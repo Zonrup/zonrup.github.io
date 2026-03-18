@@ -27,20 +27,18 @@ const { title, icon, description, href, delay } = Astro.props;
     opacity: 0;
     animation: card-unhide 0s forwards;
     animation-delay: var(--delay);
-    transition:
-      box-shadow 0.1s ease,
-      transform 0.1s ease;
+    transition: box-shadow 0.1s ease, transform 0.1s ease;
   }
 
   @keyframes card-unhide {
-    to { opacity: 1; }
+    to {
+      opacity: 1;
+    }
   }
 
   .card:hover {
     transform: translateY(-4px);
-    box-shadow:
-      0 6px 12px rgba(0, 0, 0, 0.08),
-      0 12px 28px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08), 0 12px 28px rgba(0, 0, 0, 0.12);
   }
 
   /* Animation now lives on card-inner, leaving card free for hover */
@@ -50,9 +48,7 @@ const { title, icon, description, href, delay } = Astro.props;
     background: white;
     overflow: hidden;
     border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow:
-      0 2px 4px rgba(0, 0, 0, 0.06),
-      0 4px 12px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.08);
     opacity: 0;
     transform: translateY(8px);
     animation: card-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
