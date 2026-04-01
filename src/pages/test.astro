@@ -1,0 +1,65 @@
+---
+import ScrollHijack from "../layouts/ScrollHijack.astro";
+---
+
+<ScrollHijack title="Test">
+  <div class="tall-force-scroll"></div>
+  <div id="background-cube-container" class="background-cube-container"></div>
+  <div class="animationtimeline">Hello</div>
+</ScrollHijack>
+<script>
+  import { BackgroundCube } from "../js/background-cube.ts";
+  new BackgroundCube("background-cube-container");
+</script>
+
+<style>
+  .tall-force-scroll {
+    height: 1000vh;
+    width: 100vw;
+    /* opacity: 1; */
+    position: absolute;
+    /* background-color: red; */
+  }
+
+  .background-cube-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 95vw;
+    height: 95vh;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+    background-color: grey;
+  }
+
+  .lines {
+    position: absolute;
+    flex-direction: column;
+    gap: 0.6rem;
+    align-items: flex-start;
+  }
+
+  .animationtimeline {
+    position: absolute;
+    top: 20vh;
+    left: 20vh;
+    animation-timeline: scroll(root);
+    animation-name: test;
+    animation-duration: 1s;
+    animation-timing-function: linear;
+  }
+
+  @keyframes test {
+    0% {
+      transform: translateX(0);
+    }
+    10% {
+      transform: translateX(80vh);
+    }
+    100% {
+      transform: translateX(80vh);
+    }
+  }
+</style>
