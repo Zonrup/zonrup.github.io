@@ -5,7 +5,7 @@ import ScrollHijack from "../layouts/ScrollHijack.astro";
 <ScrollHijack title="Test">
   <div class="tall-force-scroll"></div>
   <div id="background-cube-container" class="background-cube-container"></div>
-  <div class="animationtimeline">Hello</div>
+  <div class="animationtimeline">stupid cube</div>
 </ScrollHijack>
 <script>
   import { BackgroundCube } from "../js/background-cube.ts";
@@ -31,7 +31,7 @@ import ScrollHijack from "../layouts/ScrollHijack.astro";
     z-index: -1;
     pointer-events: none;
     overflow: hidden;
-    background-color: grey;
+    background-color: transparent;
   }
 
   .lines {
@@ -42,13 +42,13 @@ import ScrollHijack from "../layouts/ScrollHijack.astro";
   }
 
   .animationtimeline {
-    position: absolute;
+    position: fixed;
     top: 20vh;
-    left: 20vh;
+    left: 20vw;
     animation-timeline: scroll(root);
     animation-name: test;
     animation-duration: 1s;
-    animation-timing-function: linear;
+    animation-timing-function: ease-in-out;
   }
 
   @keyframes test {
@@ -56,10 +56,34 @@ import ScrollHijack from "../layouts/ScrollHijack.astro";
       transform: translateX(0);
     }
     10% {
-      transform: translateX(80vh);
+      transform: translateX(60vw);
+    }
+    20% {
+      transform: translateX(0);
+    }
+    30% {
+      transform: translateX(60vw);
+    }
+    40% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(60vw);
+    }
+    60% {
+      transform: translateX(0);
+    }
+    70% {
+      transform: translateX(60vw);
+    }
+    80% {
+      transform: translateX(0);
+    }
+    90% {
+      transform: translateX(60vw);
     }
     100% {
-      transform: translateX(80vh);
+      transform: translateX(0);
     }
   }
 </style>

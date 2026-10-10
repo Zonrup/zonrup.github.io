@@ -2,7 +2,9 @@ perhaps i should create a personal wiki where I write my own content about thing
 
 IDK how to organize it but maybe i can put it together in categories. here are some random thoughts and ideas about things i could try writing about for practice.
 
-Maybe like an MMO tree.
+Maybe like an MMO tree?
+
+"skill circle" with orthants (N-dimensional quadrants), icons from https://pixelarticons.com/, click on orthant causes that section to be navigated to
 
 Physical Activity
 - weightlifting journey

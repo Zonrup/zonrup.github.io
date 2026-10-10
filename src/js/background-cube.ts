@@ -7,7 +7,7 @@ export class BackgroundCube {
     private renderer!: THREE.WebGLRenderer;
     private mesh!: THREE.Mesh;
 
-    // Rotating
+    // Rotating with scroll.
     private targetRotationX: number = 0;
     private targetRotationY: number = 0;
     private currentRotationX: number = 0;
@@ -21,6 +21,7 @@ export class BackgroundCube {
     constructor(containerId: string) {
         this.container = document.getElementById(containerId);
         if (!this.container) {
+            console.warn('No container found for background cube');
             // Provide dummy functions to avoid errors if methods are called unexpectedly
             this.onScroll = () => { };
             this.onResize = () => { };
@@ -64,10 +65,10 @@ export class BackgroundCube {
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.container!.appendChild(this.renderer.domElement);
 
-        const geometry = new THREE.SphereGeometry(15, 32, 16);
-        // const geometry = new THREE.BoxGeometry(15, 15, 15);
+        // const geometry = new THREE.SphereGeometry(10, 32, 16);
+        const geometry = new THREE.BoxGeometry(15, 15, 15);
         const material = new THREE.MeshNormalMaterial({
-            wireframe: true
+            wireframe: false
         });
         this.mesh = new THREE.Mesh(geometry, material);
         this.scene.add(this.mesh);
