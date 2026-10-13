@@ -4,7 +4,7 @@ IDK how to organize it but maybe i can put it together in categories. here are s
 
 Maybe like an MMO tree?
 
-"skill circle" with orthants (N-dimensional quadrants), icons from https://pixelarticons.com/, click on orthant causes that section to be navigated to
+"skill circle" with orthants (N quadrants), icons from https://pixelarticons.com/, click on orthant causes that section to be navigated to
 
 Physical Activity
 - weightlifting journey
@@ -25,22 +25,31 @@ Physical Activity
 - hiking?
 
 Cooking (mostly recipes?)
-- Recipes
-  - that best lasagna recipe
+- Recipes to immortalize
+  - the best lasagna recipe
   - cold start skin-on chicken thigh
+  - preheated pan chicken breast
+  - various pan sauces (for after cooking meat), shallots/onions/garlic + chicken broth + cooking wine + herbs
+  - dank mashed potatoes
+  - reverse searing a steak
   - baked salmon
   - pan seared salmon
   - that tuna melt recipe
   - how to fry an egg
+  - smashburgers
+  - that kenji lopez crispy potato recipe
+  - bomb ass guac recipe
 - Techniques that I've learned and like using
   - searing meat 101: pre-heat the pan, dry the meat, SEASON that shit with salt, and having patience
+  - costco rotisserie chicken instant pot stock
+- my favorite home cook kitchen equipment
 
 Technology
 - AI and LLMs
-  - my basic explanation of LLMs, for real dummies
+  - my basic explanation of LLMs, for dummies like myself
     - how do LLMs actually work? maybe just link to that "LLMs from scratch" math thing
-  - my basic understanding of harnesses and their role
-  - eval metrics for harnesses
+  - my basic understanding of harnesses and their role in LLM quality
+  - eval metrics for harnesses vs LLMs
 - Software Engineering is Cooked
   - compile a list of funny meme images and posts to put in here
 
@@ -58,8 +67,7 @@ Video games
 
 Travel
 - places i've been
-- what is good to pack
-
+- packing list and travel tips
 
 Misc scattered thoughts
 - politics?
