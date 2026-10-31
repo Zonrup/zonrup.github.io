@@ -5215,8 +5215,8 @@ window.WORLD_DATA = {
    "region": "perion",
    "type": "field",
    "street": "Warning Street",
-   "x": 1560,
-   "y": 886,
+   "x": 1588,
+   "y": 919,
    "mobs": [
     {
      "id": "m20",
@@ -5240,8 +5240,8 @@ window.WORLD_DATA = {
    "region": "perion",
    "type": "field",
    "street": "Warning Street",
-   "x": 1452,
-   "y": 856,
+   "x": 1460,
+   "y": 891,
    "mobs": [
     {
      "id": "m20",
@@ -5265,8 +5265,8 @@ window.WORLD_DATA = {
    "region": "perion",
    "type": "field",
    "street": "Warning Street",
-   "x": 1349,
-   "y": 893,
+   "x": 1331,
+   "y": 915,
    "mobs": [
     {
      "id": "m20",
@@ -5290,8 +5290,8 @@ window.WORLD_DATA = {
    "region": "perion",
    "type": "field",
    "street": "Warning Street",
-   "x": 1254,
-   "y": 979,
+   "x": 1258,
+   "y": 994,
    "mobs": [
     {
      "id": "m20",
@@ -5319,8 +5319,8 @@ window.WORLD_DATA = {
    "region": "perion",
    "type": "field",
    "street": "Warning Street",
-   "x": 1250,
-   "y": 1089,
+   "x": 1382,
+   "y": 1073,
    "mobs": [
     {
      "id": "m20",

@@ -142,6 +142,21 @@
     }
   }
 
+  // Buildings (shops, halls, saunas...) are dead ends: each links to one map, its host
+  // (a town, Henesys Market, Sleepywood Hotel...). They're not drawn on the map; the host's
+  // panel lists them and opens each as a sub-pane.
+  const hostOf = new Map();       // building -> host map
+  const buildingsOf = new Map();  // host map -> [buildings]
+  for (const m of maps) {
+    if (m.type !== "building") continue;
+    const host = (neighbors.get(m.id) || []).map((n) => n.map).find((n) => n.type !== "building");
+    if (!host) continue;
+    hostOf.set(m, host);
+    if (!buildingsOf.has(host)) buildingsOf.set(host, []);
+    buildingsOf.get(host).push(m);
+  }
+  for (const list of buildingsOf.values()) list.sort((a, b) => a.name.localeCompare(b.name));
+
   // Main roads: for every pair of towns on the island, the shortest walk between them
   // (fewest maps, then shortest distance). A map's score is how many of those walks pass
   // through it; 0 means it's on a side path. Smart labels name high scores first.
@@ -210,6 +225,25 @@
         if (comp.length >= 2) series.push({ base, members: comp, key: `${base}|${comp[0].id}` });
       }
     }
+
+    // Hand-picked areas whose maps don't share a numbered name, or single big maps that
+    // deserve an area name of their own. They take their maps out of any automatic series
+    // (which is dropped if fewer than 2 maps are left).
+    const AREA_GROUPS = [
+      { name: "Golem Temple", maps: ["the_entrance_of_golem_s_temple", "the_breathing_rock",
+        "golem_s_temple_i", "golem_s_temple_ii", "golem_s_temple_iii", "golem_s_temple_iv"] },
+      { name: "3-Way Road-Split", maps: ["3_way_road_split"] },
+    ];
+    for (const g of AREA_GROUPS) {
+      const members = g.maps.map((id) => byId.get(id)).filter(Boolean);
+      if (!members.length) continue;
+      const taken = new Set(members);
+      for (let i = series.length - 1; i >= 0; i--) {
+        series[i].members = series[i].members.filter((m) => !taken.has(m));
+        if (series[i].members.length < 2) series.splice(i, 1);
+      }
+      series.push({ base: g.name, members, key: `${g.name}|area`, single: members.length === 1 });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -220,9 +254,9 @@
     level: 30,
     selected: null,
     hover: null,
+    portalHover: null, // map whose minimap portal pin is under the mouse (ringed on the map)
     showHidden: true,
     labelMode: "smart", // "none" | "smart" | "all"
-    showBuildings: false,
     showForgottenHollow: false,
     edit: false,
     mobHit: null, // { ids, maps: Set } while a monster search is highlighting maps
@@ -236,7 +270,6 @@
     if (typeof saved.showHidden === "boolean") state.showHidden = saved.showHidden;
     if (["none", "smart", "all"].includes(saved.labelMode)) state.labelMode = saved.labelMode;
     else if (saved.showLabels === true) state.labelMode = "all"; // old "Always show labels"
-    if (typeof saved.showBuildings === "boolean") state.showBuildings = saved.showBuildings;
     if (typeof saved.showForgottenHollow === "boolean") state.showForgottenHollow = saved.showForgottenHollow;
   } catch (_) { /* storage unavailable */ }
 
@@ -244,7 +277,7 @@
     try {
       localStorage.setItem("wm-prefs", JSON.stringify({
         level: state.level, showHidden: state.showHidden, labelMode: state.labelMode,
-        showBuildings: state.showBuildings, showForgottenHollow: state.showForgottenHollow,
+        showForgottenHollow: state.showForgottenHollow,
       }));
     } catch (_) { /* ignore */ }
   }
@@ -252,7 +285,7 @@
   function isVisible(m) {
     if (m.area === "forgotten_hollow" && !state.showForgottenHollow) return false;
     if (m.type === "hidden") return state.showHidden;
-    if (m.type === "building") return state.showBuildings;
+    if (hostOf.has(m)) return false; // buildings live in their host's panel, not on the map
     return true;
   }
 
@@ -310,6 +343,13 @@
   }
 
   // Curve for an edge: a gentle bend so paths look hand-drawn.
+  // Each link bends a little to one side, picked from a hash of its key. Links listed here
+  // (key = the two map ids, sorted, joined by "|") bend the other way.
+  const FLIP_BEND = new Set([
+    "the_burnt_land_iii|the_burnt_land_iv",
+    "the_burnt_land_iv|the_burnt_land_v",
+  ]);
+
   function edgeCurve(e) {
     if (e.via && e.via.length) {
       return { pts: [[e.a.x, e.a.y], ...e.via, [e.b.x, e.b.y]], spline: true };
@@ -317,7 +357,7 @@
     const a = endpoint(e.a, e.b), b = endpoint(e.b, e.a);
     const dx = b.x - a.x, dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
-    const h = (hashStr(e.key) % 1000) / 1000 - 0.5;
+    const h = ((hashStr(e.key) % 1000) / 1000 - 0.5) * (FLIP_BEND.has(e.key) ? -1 : 1);
     // Section maps sit on a tidy tree, so their links stay straight.
     const off = e.a.section || e.b.section ? 0 : h * 0.3 * len;
     return {
@@ -390,14 +430,12 @@
         const p = new Path2D();
         p.moveTo(root.x, root.y);
         p.bezierCurveTo(root.x, (root.y + s.entry.y) / 2, s.entry.x, (root.y + s.entry.y) / 2, s.entry.x, s.entry.y);
+        // Kept faint on purpose: a hint of the way down, not a road.
         ctx.lineCap = "round";
-        ctx.setLineDash([]);
-        ctx.strokeStyle = "rgba(20,14,30,.55)";
-        ctx.lineWidth = 26;
-        ctx.stroke(p);
-        ctx.setLineDash([22, 16]);
-        ctx.strokeStyle = "#b897ff";
-        ctx.lineWidth = 9;
+        // Sizes in screen px (this is drawn in world units, hence / cam.s).
+        ctx.setLineDash([6 / cam.s, 8 / cam.s]);
+        ctx.strokeStyle = "rgba(184,151,255,.45)";
+        ctx.lineWidth = 2.5 / cam.s;
         ctx.stroke(p);
         ctx.setLineDash([]);
       }
@@ -934,15 +972,30 @@
     return (m.worldMapDot ? 10.5 : 8.5) * k;
   }
 
-  // Map text (labels, level lines, area names). Nunito reads better than Fredoka at small sizes.
-  const LABEL_FAMILY = `Nunito, "Segoe UI", system-ui, sans-serif`;
-  function label(text, x, y, size, fill = "#fff", stroke = "#2b1a0e", weight = 800) {
+  // Node outline: a darker, semi-transparent shade of the node's own fill, thin.
+  const NODE_EDGE_W = 1.4;
+  const nodeEdgeCache = new Map();
+  function nodeEdge(hex) {
+    if (!nodeEdgeCache.has(hex)) {
+      const n = parseInt(hex.slice(1), 16);
+      const k = 0.55; // share of the fill colour kept (the rest is black)
+      const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => Math.round(c * k));
+      nodeEdgeCache.set(hex, `rgba(${r},${g},${b},.8)`);
+    }
+    return nodeEdgeCache.get(hex);
+  }
+  // Label outline thickness as a share of the font size (was 0.3).
+  const LABEL_EDGE = 0.17;
+
+  // Map text (labels, level lines, area names): Atkinson Hyperlegible, made for legibility (bold 700 only here).
+  const LABEL_FAMILY = `"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif`;
+  function label(text, x, y, size, fill = "#fff", stroke = "#2b1a0e", weight = 700) {
     ctx.font = `${weight} ${size}px ${LABEL_FAMILY}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = Math.max(3, size * 0.3);
+    ctx.lineWidth = Math.max(2, size * LABEL_EDGE);
     ctx.strokeText(text, x, y);
     ctx.fillStyle = fill;
     ctx.fillText(text, x, y);
@@ -1025,8 +1078,21 @@
 
   function drawNode(m, now) {
     const [x, y] = worldToScreen(m.x, m.y);
-    const r = nodeRadius(m) * (state.hover === m ? 1.15 : 1);
+    const r = nodeRadius(m) * (state.hover === m || state.portalHover === m ? 1.15 : 1);
     if (x < -80 || y < -60 || x > W + 80 || y > H + 60) return;
+
+    // Portal-blue ring on the target of the minimap pin under the mouse.
+    if (state.portalHover === m) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, r + 7, 0, Math.PI * 2);
+      ctx.strokeStyle = "#3aa0ff";
+      ctx.lineWidth = 4;
+      ctx.shadowColor = "rgba(80,180,255,.9)";
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+      ctx.restore();
+    }
 
     if (state.selected === m) {
       const pulse = (Math.sin(now / 260) + 1) / 2;
@@ -1059,7 +1125,7 @@
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
-      ctx.strokeStyle = "#0f3a6e"; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = nodeEdge("#1c6fd1"); ctx.lineWidth = NODE_EDGE_W + 0.4;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
       return { m, x, y: y + r + 20, priority: 0, banner: true };
     }
@@ -1077,16 +1143,18 @@
 
     shapePath(m.type, x, y, r);
     ctx.fillStyle = color; ctx.fill();
-    ctx.strokeStyle = "#2b1a0e"; ctx.lineWidth = 2.2;
+    ctx.strokeStyle = nodeEdge(color); ctx.lineWidth = NODE_EDGE_W;
     if (m.type === "hidden") ctx.setLineDash([3, 2]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // glossy highlight
-    ctx.beginPath();
-    ctx.arc(x - r * 0.3, y - r * 0.35, r * 0.32, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,.6)";
-    ctx.fill();
+    // Soft highlight, round nodes only (squares, diamonds and stars stay flat).
+    if (!["dungeon", "hidden", "boss"].includes(m.type)) {
+      ctx.beginPath();
+      ctx.arc(x - r * 0.32, y - r * 0.36, r * 0.26, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,.28)";
+      ctx.fill();
+    }
 
     if (m.type === "safe") {
       ctx.beginPath(); ctx.arc(x, y, r * 0.35, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
@@ -1097,7 +1165,7 @@
       drawSkull(x + r * 0.85 + s * 0.3, y - r * 0.85 - s * 0.2, s);
     }
 
-    const focus = state.hover === m || state.selected === m;
+    const focus = state.hover === m || state.selected === m || state.portalHover === m;
     const lr = farmRange(m);
     const lvText = lr && (cam.s >= 1.1 || focus) ? (lr.min === lr.max ? `Lv ${lr.min}` : `Lv ${lr.min}–${lr.max}`) : null;
     return { m, x, y, r, color, lvText, focus, mobHit };
@@ -1112,8 +1180,8 @@
   // routeScore), numbered side paths named once along their length, then the rest.
   // ---------------------------------------------------------------------------
   const LABEL_SIZE = 14, LV_SIZE = 12, SERIES_SIZE = 16;
-  const LABEL_FONT = `800 ${LABEL_SIZE}px ${LABEL_FAMILY}`;
-  const SERIES_FONT = `italic 800 ${SERIES_SIZE}px ${LABEL_FAMILY}`;
+  const LABEL_FONT = `700 ${LABEL_SIZE}px ${LABEL_FAMILY}`;
+  const SERIES_FONT = `italic 700 ${SERIES_SIZE}px ${LABEL_FAMILY}`;
   // Smart zoom tiers, by camera scale (screen px per world unit). Scale is what decides
   // how much room labels have between nodes, whatever the window size; a bigger window
   // just shows more of the map at the same scale. Fitting the whole map is about 0.18
@@ -1122,8 +1190,8 @@
   //   AREA..ROAD: + area names along numbered side paths ("East Rocky Mountain")
   //   ROAD..ALL:  + names of maps on main roads between towns
   //   ALL and up: + every other map name (still never overlapping)
-  const SMART_ZOOM = { AREA: 0.2, ROAD: 0.4, ALL: 0.6 };
-  const LABEL_PAD = 3;          // px kept clear around each smart label
+  const SMART_ZOOM = { AREA: 0.2, ROAD: 0.6, ALL: 0.9 };
+  const LABEL_PAD = 8;          // px kept clear around each smart label (more = sparser)
   const SERIES_FIT = 0.75;      // share of neighbour pairs whose own labels must fit to skip the series label
   const textWidths = new Map();
   // Web fonts arrive after the first frames: re-measure and redraw once they're in.
@@ -1190,7 +1258,8 @@
       for (const s of series) {
         // Once main-road names show, maps on a main road keep their own labels.
         const run = s.members.filter((m) => jobOf.has(m) && (tier < 2 || !(routeScore.get(m.id) > 0)));
-        if (run.length < 2) continue;
+        if (run.length < (s.single ? 1 : 2)) continue;
+        if (tier === 3 && s.single) continue; // the map's own label takes over
         if (tier === 3) { // fully zoomed in: split into map names where they fit
           const inRun = new Set(run);
           let pairs = 0, ok = 0;
@@ -1241,32 +1310,58 @@
       if (!at) continue;
       const top = at.cy - h / 2;
       label(text, at.cx, top + LABEL_SIZE / 2 + 2, LABEL_SIZE);
-      if (j.lvText) label(j.lvText, at.cx, top + LABEL_SIZE + 4 + LV_SIZE / 2, LV_SIZE, j.color, "#2b1a0e", 800);
+      if (j.lvText) label(j.lvText, at.cx, top + LABEL_SIZE + 4 + LV_SIZE / 2, LV_SIZE, j.color, "#2b1a0e", 700);
     }
 
-    // One italic name laid along a numbered side path, e.g. "East Rocky Mountain".
+    // One italic name laid along an area, e.g. "East Rocky Mountain". Spots tried in order:
+    // the middle of the run along its main direction, the middle of each link inside the
+    // run along that link, then on each map; each also flat. A single-map area sits just
+    // under its node. The first spot clear of other labels and other maps' nodes wins.
     function placeSeries(c, fits, placed) {
       const pts = c.run.map((m) => jobOf.get(m));
-      const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length, cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
-      // Main direction of the run; flat text if the run isn't clearly stretched one way.
-      let sxx = 0, syy = 0, sxy = 0;
-      for (const p of pts) { const dx = p.x - cx, dy = p.y - cy; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
-      const ang0 = 0.5 * Math.atan2(2 * sxy, sxx - syy);
-      const tr = sxx + syy, det = sxx * syy - sxy * sxy;
-      const l1 = tr / 2 + Math.sqrt(Math.max(0, tr * tr / 4 - det)), l2 = tr / 2 - Math.sqrt(Math.max(0, tr * tr / 4 - det));
-      let ang = l1 > 3 * Math.max(l2, 1) ? ang0 : 0;
-      if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
-      if (Math.abs(ang) > Math.PI / 3) ang = 0; // too steep to read comfortably
-      const w = textWidth(c.s.base, SERIES_FONT) + 8;
-      const box = { cx, cy, hw: w / 2, hh: SERIES_SIZE / 2 + 2, ang };
-      if (!fits(box, new Set(c.run))) return;
+      const w = textWidth(c.s.base, SERIES_FONT) + 8, hh = SERIES_SIZE / 2 + 2;
+      const readable = (a) => {
+        if (a > Math.PI / 2) a -= Math.PI; else if (a < -Math.PI / 2) a += Math.PI;
+        return Math.abs(a) > Math.PI / 3 ? 0 : a; // too steep to read comfortably
+      };
+      const spots = [];
+      if (c.s.single) {
+        const p = pts[0];
+        spots.push([p.x, p.y + p.r + hh + 3, 0], [p.x, p.y - p.r - hh - 3, 0]);
+      } else {
+        const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length, cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+        // Main direction of the run; flat text if the run isn't clearly stretched one way.
+        let sxx = 0, syy = 0, sxy = 0;
+        for (const p of pts) { const dx = p.x - cx, dy = p.y - cy; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+        const tr = sxx + syy, det = sxx * syy - sxy * sxy, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+        const main = tr / 2 + disc > 3 * Math.max(tr / 2 - disc, 1) ? readable(0.5 * Math.atan2(2 * sxy, sxx - syy)) : 0;
+        spots.push([cx, cy, main]);
+        const inRun = new Set(c.run);
+        for (const m of c.run) {
+          for (const { map: v } of neighbors.get(m.id)) {
+            if (!inRun.has(v) || v.id < m.id) continue;
+            const a = jobOf.get(m), b = jobOf.get(v);
+            spots.push([(a.x + b.x) / 2, (a.y + b.y) / 2, readable(Math.atan2(b.y - a.y, b.x - a.x))]);
+          }
+        }
+        for (const p of pts) spots.push([p.x, p.y, main]);
+        for (const s of spots.slice()) if (s[2]) spots.push([s[0], s[1], 0]);
+      }
+      const own = new Set(c.run);
+      let box = null;
+      for (const [x, y, ang] of spots) {
+        const b = { cx: x, cy: y, hw: w / 2, hh, ang };
+        if (fits(b, own)) { box = b; break; }
+      }
+      if (!box) return;
       placed.push(box);
+      const { cx, cy, ang } = box;
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(ang);
       ctx.font = SERIES_FONT;
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-      ctx.strokeStyle = "rgba(43,26,14,.85)"; ctx.lineWidth = 4.5;
+      ctx.strokeStyle = "rgba(43,26,14,.85)"; ctx.lineWidth = Math.max(2, SERIES_SIZE * LABEL_EDGE);
       ctx.strokeText(c.s.base, 0, 0);
       ctx.fillStyle = "#fff3c4";
       ctx.fillText(c.s.base, 0, 0);
@@ -1433,7 +1528,10 @@
     }
 
     const hit = hitNode(ev.clientX, ev.clientY);
-    if (hit !== state.hover) { state.hover = hit; needsDraw = true; }
+    if (hit !== state.hover) {
+      state.hover = hit; needsDraw = true;
+      lightKey(hit && hit !== state.selected ? hit.mapId : null); // its portal pins on the open minimap
+    }
     canvas.classList.toggle("pointing", !!hit);
     if (hit) showTooltip(hit, ev.clientX, ev.clientY); else hideTooltip();
   });
@@ -1458,7 +1556,7 @@
   }
   canvas.addEventListener("pointerup", endPointer);
   canvas.addEventListener("pointercancel", endPointer);
-  canvas.addEventListener("pointerleave", () => { if (!drag) { state.hover = null; hideTooltip(); needsDraw = true; } });
+  canvas.addEventListener("pointerleave", () => { if (!drag) { state.hover = null; lightKey(null); hideTooltip(); needsDraw = true; } });
 
   canvas.addEventListener("wheel", (ev) => {
     ev.preventDefault();
@@ -1519,22 +1617,42 @@
   const TYPE_LABEL = { town: "Town", field: "Field", hidden: "Hidden Street", dungeon: "Dungeon", boss: "Boss", safe: "Safe zone", building: "Building" };
   const panelBody = document.getElementById("panelBody");
 
+  // A building can't be selected on the map: selecting one selects its host and opens the
+  // building as a sub-pane of the host's panel (panelSub), with a Back button.
+  let panelSub = null;
   function select(m, fly = true) {
+    const sub = m && hostOf.has(m) ? m : null;
+    if (sub) m = hostOf.get(sub);
+    panelSub = sub;
     state.selected = m;
     needsDraw = true;
     document.body.classList.toggle("panel-open", !!m);
     document.getElementById("panel").setAttribute("aria-hidden", m ? "false" : "true");
-    try { history.replaceState(null, "", m ? `#map=${encodeURIComponent(m.id)}` : location.pathname + location.search); } catch (_) { /* file:// may refuse */ }
+    const shown = sub || m;
+    try { history.replaceState(null, "", shown ? `#map=${encodeURIComponent(shown.id)}` : location.pathname + location.search); } catch (_) { /* file:// may refuse */ }
     if (!m) return;
     renderPanel(m);
     if (fly) flyTo(m);
   }
 
-  function renderPanel(m) {
+  // Open (or close, with null) a building sub-pane inside the current host's panel.
+  function openSub(b) {
+    if (!state.selected) return;
+    panelSub = b;
+    const shown = b || state.selected;
+    try { history.replaceState(null, "", `#map=${encodeURIComponent(shown.id)}`); } catch (_) { /* ignore */ }
+    renderPanel(state.selected);
+    document.getElementById("panel").scrollTop = 0;
+  }
+
+  function renderPanel(host) {
+    const m = panelSub && hostOf.get(panelSub) === host ? panelSub : host;
+    const inSub = m !== host;
     const region = DATA.regions[m.region]?.name || m.region;
     const lr = levelRange(m);
     const d = mapDiff(m);
-    let h = `<div class="p-badges"><span class="badge ${m.type}">${TYPE_LABEL[m.type] || m.type}</span>`;
+    let h = inSub ? `<button class="p-back" data-back>← Back to ${esc(host.name)}</button>` : "";
+    h += `<div class="p-badges"><span class="badge ${m.type}">${TYPE_LABEL[m.type] || m.type}</span>`;
     if (m.layer === "underground") h += `<span class="badge underground">Underground</span>`;
     h += m.verified
       ? `<span class="badge verified" title="Checked against meowDB">✓ meowDB</span>`
@@ -1551,8 +1669,20 @@
         <span class="chip" style="background:${c.color}"></span>
         <span class="big">Lv ${lr.min}${lr.max !== lr.min ? "–" + lr.max : ""}</span>
         <span class="verdict">${c.label}<br><span class="muted">at level ${state.level}</span></span></div>`;
-    } else {
+    } else if (!inSub) {
       h += `<p class="muted" style="margin-top:14px">${m.type === "town" ? "Town — no monsters." : "No monsters here."}</p>`;
+    }
+
+    // A host lists its buildings; each opens as a sub-pane.
+    const blds = !inSub ? buildingsOf.get(m) || [] : [];
+    if (blds.length) {
+      h += `<section><h3>Buildings (${blds.length})</h3><div class="links">`;
+      for (const b of blds) {
+        const blr = levelRange(b);
+        h += `<button class="link-btn" data-building="${esc(b.id)}"><span class="chip building-chip"></span>
+          <span>${esc(b.name)}</span><span class="lv">${blr ? `Lv ${blr.min}${blr.max !== blr.min ? "–" + blr.max : ""}` : "›"}</span></button>`;
+      }
+      h += `</div></section>`;
     }
 
     const ml = mobList(m);
@@ -1572,20 +1702,24 @@
       h += `</ul></section>`;
     }
 
-    const nb = neighbors.get(m.id) || [];
+    // Buildings are listed above, not here.
+    const nb = (neighbors.get(m.id) || []).filter(({ map: n }) => !hostOf.has(n));
     h += `<section><h3>Connected maps (${nb.length})</h3>`;
     if (nb.length) {
       h += `<div class="links">`;
       for (const { map: n, via } of nb) {
         const nlr = levelRange(n), nd = mapDiff(n);
         const col = nd ? DIFF[nd].color : n.type === "town" ? "#3aa0ff" : "#a9cbe8";
+        const nb2 = (buildingsOf.get(n) || []).length;
+        const sub = [via, nb2 ? `${nb2} building${nb2 === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
         h += `<button class="link-btn" data-goto="${esc(n.id)}"><span class="chip" style="background:${col}"></span>
-          <span>${esc(n.name)}${via ? `<br><span class="via">${esc(via)}</span>` : ""}</span>
+          <span>${esc(n.name)}${sub ? `<br><span class="via">${esc(sub)}</span>` : ""}</span>
           <span class="lv">${nlr ? `Lv ${nlr.min}${nlr.max !== nlr.min ? "–" + nlr.max : ""}` : TYPE_LABEL[n.type] || ""}</span></button>`;
       }
       h += `</div>`;
     } else h += `<p class="muted">None recorded yet.</p>`;
     h += `</section>`;
+    h += minimapHtml(m);
 
     if (m.exits && m.exits.length) {
       h += `<section><h3>Leads off this map</h3><div class="links">`;
@@ -1601,9 +1735,78 @@
     panelBody.innerHTML = h;
   }
 
+  // meowDB minimap (data/minimap_info.js, from tools/scrape_minimaps.py) with a pin on each
+  // portal. Pins to maps we have are buttons that open that map's panel; others link to
+  // meowDB. The data script loads deferred and the image lazily, so read them at render time.
+  let byMapId = null;
+  function minimapHtml(m) {
+    const info = window.MINIMAP_INFO && window.MINIMAP_INFO[m.mapId];
+    const v = info && info.minimap;
+    if (!v || !v.img || !v.w || !v.h) return "";
+    if (!byMapId) byMapId = new Map(maps.map((x) => [x.mapId, x]));
+    // Game (x, y) -> percent of the image; the minimap spans w x h game units from (-cx, -cy).
+    const pct = (val, c, size) => Math.max(0, Math.min(100, ((val + c) / size) * 100)).toFixed(2);
+    let pins = "";
+    for (const [x, y, to, toName] of info.portals) {
+      if (!to || to === "999999999" || to === m.mapId) continue;
+      const t = byMapId.get(to);
+      const name = t ? t.name : toName || to;
+      const left = pct(x, v.cx, v.w);
+      const pos = `left:${left}%;top:${pct(y, v.cy, v.h)}%`;
+      // The hover label (CSS, from data-name) lines up with the minimap's nearer side for
+      // pins in its outer thirds, so long names stay inside the panel.
+      const edge = left < 34 ? " edge-l" : left > 66 ? " edge-r" : "";
+      if (t) {
+        const kind = hostOf.has(t) ? " to-building" : "";
+        pins += `<button class="mm-portal${kind}${edge}" style="${pos}" data-portal="${esc(t.id)}" data-key="${esc(to)}" data-name="${esc(name)}" aria-label="Go to ${esc(name)}"></button>`;
+      } else {
+        pins += `<a class="mm-portal off${edge}" style="${pos}" href="https://meowdb.com/msclassic/maps/${encodeURIComponent(to)}" target="_blank" rel="noopener" data-key="${esc(to)}" data-name="${esc(name)} ↗" aria-label="${esc(name)} on meowDB"></a>`;
+      }
+    }
+    const ar = v.imgW && v.imgH ? ` style="aspect-ratio:${v.imgW}/${v.imgH}"` : "";
+    return `<section><h3>Minimap</h3><div class="minimap"${ar}>
+      <img src="${esc(v.img)}" alt="Minimap of ${esc(m.name)}" loading="lazy" decoding="async">${pins}</div></section>`;
+  }
+
+  // Deferred scripts run just before DOMContentLoaded, after a panel opened from the URL.
+  if (!window.MINIMAP_INFO) document.addEventListener("DOMContentLoaded", () => { if (state.selected) renderPanel(state.selected); });
+
+  // Open map `t` in the panel: a building of the current host opens as its sub-pane, the
+  // host itself from one of its buildings is "Back", anything else is selected.
+  function goToMap(t) {
+    if (!t) return;
+    if (state.selected && hostOf.get(t) === state.selected) { openSub(t); return; }
+    if (panelSub && t === state.selected) { openSub(null); return; }
+    reveal(t); select(t);
+  }
+
+  // Hovering a pin lights every pin on this minimap that leads to the same map (they show
+  // their labels together) and rings that map on the world map (a building's host, since
+  // buildings aren't drawn).
+  // The reverse works too: hovering a node on the world map lights the pins leading to it.
+  function lightKey(key) { // key: the target's meowDB map id
+    for (const p of panelBody.querySelectorAll(".mm-portal")) p.classList.toggle("lit", !!key && p.dataset.key === key);
+  }
+  function lightPins(pin) {
+    lightKey(pin ? pin.dataset.key : null);
+    const t = pin && pin.dataset.portal ? byId.get(pin.dataset.portal) : null;
+    const node = t ? hostOf.get(t) || t : null;
+    if (node !== state.portalHover) { state.portalHover = node; needsDraw = true; }
+  }
+  panelBody.addEventListener("mouseover", (ev) => lightPins(ev.target.closest(".mm-portal")));
+  panelBody.addEventListener("mouseleave", () => lightPins(null));
+  panelBody.addEventListener("focusin", (ev) => lightPins(ev.target.closest(".mm-portal")));
+  panelBody.addEventListener("focusout", () => lightPins(null));
+
   panelBody.addEventListener("click", (ev) => {
+    lightPins(null); // the panel is about to be redrawn
+    if (ev.target.closest("[data-back]")) { openSub(null); return; }
+    const bld = ev.target.closest("[data-building]");
+    if (bld) { openSub(byId.get(bld.dataset.building)); return; }
+    const pt = ev.target.closest("[data-portal]");
+    if (pt) { goToMap(byId.get(pt.dataset.portal)); return; }
     const b = ev.target.closest("[data-goto]");
-    if (b) { const m = byId.get(b.dataset.goto); reveal(m); select(m); }
+    if (b) goToMap(byId.get(b.dataset.goto));
   });
   document.getElementById("panelClose").addEventListener("click", () => select(null));
 
@@ -1643,13 +1846,6 @@
     if (state.selected && !isVisible(state.selected)) select(null);
     needsDraw = true; savePrefs();
   });
-  const showBuildings = document.getElementById("showBuildings");
-  showBuildings.checked = state.showBuildings;
-  showBuildings.addEventListener("change", () => {
-    state.showBuildings = showBuildings.checked;
-    if (state.selected && !isVisible(state.selected)) select(null);
-    needsDraw = true; savePrefs();
-  });
   const showForgottenHollow = document.getElementById("showForgottenHollow");
   showForgottenHollow.checked = state.showForgottenHollow;
   showForgottenHollow.addEventListener("change", () => {
@@ -1660,10 +1856,10 @@
 
   // Turn on whatever toggles a map needs to be shown (used when jumping to it).
   function reveal(m) {
+    if (m && hostOf.has(m)) m = hostOf.get(m); // a building shows through its host
     if (!m || isVisible(m)) return;
     if (m.area === "forgotten_hollow") state.showForgottenHollow = showForgottenHollow.checked = true;
     if (m.type === "hidden") state.showHidden = showHidden.checked = true;
-    if (m.type === "building") state.showBuildings = showBuildings.checked = true;
     needsDraw = true; savePrefs();
   }
 
@@ -1742,7 +1938,8 @@
     const fromTyping = typedRings();
     const names = fromTyping.length ? fromTyping : picked.size ? [...picked] : previewNames;
     const groups = names.map((n) => groupByName.get(n)).filter(Boolean);
-    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: new Set(groups.flatMap((g) => [...g.maps])) } : null;
+    // A monster inside a building rings the building's host (buildings aren't drawn).
+    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: new Set(groups.flatMap((g) => [...g.maps].map((m) => hostOf.get(m) || m))) } : null;
     const n = state.mobHit ? state.mobHit.maps.size : 0;
     mobSelInfo.textContent = picked.size ? `${picked.size} picked · ${plural(n, "map")}` : "Pick monsters to see where they spawn";
 
