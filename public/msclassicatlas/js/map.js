@@ -1,0 +1,1963 @@
+(() => {
+  "use strict";
+
+  const DATA = window.WORLD_DATA;
+  const TERRAIN = window.WORLD_TERRAIN;
+  // Terrain lives in its own file (hand-drawn); map data is generated from meowDB.
+  DATA.islands = TERRAIN.islands;
+  DATA.biomes = TERRAIN.biomes;
+  DATA.rivers = TERRAIN.rivers;
+  DATA.meta.width = TERRAIN.width;
+  DATA.meta.height = TERRAIN.height;
+  // Scenery (trees, rocks, clouds) was sized for an older, smaller world; DS scales it up.
+  const DS = (TERRAIN.scale || 6) / 3.75;
+  const canvas = document.getElementById("map");
+  const ctx = canvas.getContext("2d");
+
+  // ---------------------------------------------------------------------------
+  // Difficulty colors, based on monster level minus player level.
+  // Tune the thresholds in diffBands.
+  // ---------------------------------------------------------------------------
+  const DIFF = {
+    red:    { color: "#e2483b", label: "Too hard",      desc: "Well above you: slow and dangerous" },
+    orange: { color: "#f28c28", label: "Hard",          desc: "Around your level or a bit above" },
+    yellow: { color: "#f3d23a", label: "Good farming",  desc: "Below you, still good exp" },
+    green:  { color: "#4cbf4a", label: "Easy",          desc: "Fast kills, less exp" },
+    grey:   { color: "#9b9b9b", label: "Trivial",       desc: "Too low to be worth it" },
+  };
+  const ORDER = ["red", "orange", "yellow", "green", "grey"];
+
+  // Lowest level gap (monster level minus yours) for each color at player level L.
+  // Anchors: at 29, green/blue mushrooms (14-19) are easy, Ant Tunnel (22-27) is good
+  // farming, 28-30 is hard and 31+ too hard. Below 10, snails and shrooms are farming
+  // while slimes, pigs and orange mushrooms (6-8) are hard. "More than 10 below is
+  // trivial" starts at 20 and the gap widens a little as you level.
+  function diffBands(L) {
+    return {
+      red: L < 10 ? 4 : L < 20 ? 3 : 2,
+      orange: L < 20 ? 0 : -1,
+      yellow: -(5 + Math.floor(L / 10)),
+      green: L < 20 ? -10 : -Math.min(15, 10 + Math.floor((L - 19) / 2)),
+    };
+  }
+
+  function diffFor(mobLv, L) {
+    const d = mobLv - L, b = diffBands(L);
+    if (d >= b.red) return "red";
+    if (d >= b.orange) return "orange";
+    if (d >= b.yellow) return "yellow";
+    if (d >= b.green) return "green";
+    return "grey";
+  }
+
+  // Level boundaries for each color at player level L (for the legend).
+  function diffRanges(L) {
+    const b = diffBands(L);
+    const span = (lo, hi) => (hi < 1 || lo > hi ? "—" : lo === hi ? `${hi}` : `${Math.max(1, lo)}–${hi}`);
+    return {
+      red: `${L + b.red}+`,
+      orange: span(L + b.orange, L + b.red - 1),
+      yellow: span(L + b.yellow, L + b.orange - 1),
+      green: span(L + b.green, L + b.yellow - 1),
+      grey: L + b.green - 1 >= 1 ? `≤ ${L + b.green - 1}` : "—",
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Data indexes
+  // ---------------------------------------------------------------------------
+  const maps = DATA.maps;
+  const byId = new Map(maps.map((m) => [m.id, m]));
+  const mobs = DATA.mobs;
+
+  // A map's "mobs" entries are either a monster id, or { id, count } where count is spawn points.
+  function mobList(m) {
+    return (m.mobs || []).map((entry) => {
+      const id = typeof entry === "string" ? entry : entry.id;
+      const count = typeof entry === "string" ? null : entry.count ?? null;
+      const mob = mobs[id];
+      if (!mob) console.warn(`Map "${m.id}" lists unknown monster "${id}"`);
+      return mob ? { id, count, ...mob } : { id, count, name: id, level: 0 };
+    });
+  }
+
+  // Share of a map's spawns that sets its color: the map takes the level that this
+  // share of spawns is at or above. An average lets a crowd of snails hide the stumps
+  // and orange mushrooms you will keep running into.
+  const HARD_SHARE = 1 / 3;
+
+  // Average and `typical` (see HARD_SHARE) are weighted by spawn count when known.
+  function levelRange(m) {
+    const list = mobList(m).filter((x) => x.level > 0);
+    if (!list.length) return null;
+    const lv = list.map((x) => x.level);
+    const w = list.map((x) => x.count ?? 1);
+    const total = w.reduce((a, b) => a + b, 0);
+    const byLevel = list.map((x, i) => [x.level, w[i]]).sort((a, b) => b[0] - a[0]);
+    let seen = 0, typical = byLevel[byLevel.length - 1][0];
+    for (const [l, c] of byLevel) { seen += c; if (seen >= total * HARD_SHARE - 1e-9) { typical = l; break; } }
+    return {
+      min: Math.min(...lv),
+      max: Math.max(...lv),
+      avg: list.reduce((a, x, i) => a + x.level * w[i], 0) / total,
+      typical,
+    };
+  }
+
+  // Bosses are ignored for a map's color unless the map has nothing else.
+  function farmRange(m) {
+    const list = mobList(m);
+    const normal = list.filter((x) => !x.boss);
+    return levelRange({ mobs: (normal.length ? normal : list).map((x) => ({ id: x.id, count: x.count })) });
+  }
+
+  function mapDiff(m) {
+    const r = farmRange(m);
+    return r ? diffFor(r.typical, state.level) : null;
+  }
+
+  // Undirected edges built from each map's "links".
+  const edges = [];
+  const neighbors = new Map(maps.map((m) => [m.id, []]));
+  {
+    const seen = new Set();
+    for (const m of maps) {
+      for (const to of m.links || []) {
+        if (!byId.has(to)) { console.warn(`Map "${m.id}" links to unknown map "${to}"`); continue; }
+        const key = [m.id, to].sort().join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const a = m, b = byId.get(to);
+        edges.push({ a, b, key, kind: "walk" });
+        neighbors.get(a.id).push({ map: b });
+        neighbors.get(b.id).push({ map: a });
+      }
+    }
+    for (const r of DATA.routes || []) {
+      const a = byId.get(r.from), b = byId.get(r.to);
+      if (!a || !b) { console.warn("Bad route", r); continue; }
+      edges.push({ a, b, key: `${r.from}|${r.to}|route`, kind: r.kind || "boat", via: r.via, label: r.label });
+      neighbors.get(a.id).push({ map: b, via: r.label });
+      neighbors.get(b.id).push({ map: a, via: r.label });
+    }
+  }
+
+  // Main roads: for every pair of towns on the island, the shortest walk between them
+  // (fewest maps, then shortest distance). A map's score is how many of those walks pass
+  // through it; 0 means it's on a side path. Smart labels name high scores first.
+  const routeScore = new Map();
+  let maxRouteScore = 1;
+  {
+    const onIsland = (m) => !m.section && m.type !== "building";
+    const adj = new Map(maps.filter(onIsland).map((m) => [m, []]));
+    for (const e of edges) {
+      if (e.kind !== "walk" || !adj.has(e.a) || !adj.has(e.b)) continue;
+      const w = 1 + Math.hypot(e.a.x - e.b.x, e.a.y - e.b.y) / 2000;
+      adj.get(e.a).push([e.b, w]);
+      adj.get(e.b).push([e.a, w]);
+    }
+    const towns = [...adj.keys()].filter((m) => m.type === "town");
+    for (let i = 0; i < towns.length; i++) {
+      // Dijkstra from towns[i] (small graph, so a linear scan for the next node is fine).
+      const dist = new Map([[towns[i], 0]]), prev = new Map(), done = new Set();
+      for (;;) {
+        let u = null;
+        for (const [m, d] of dist) if (!done.has(m) && (u === null || d < dist.get(u))) u = m;
+        if (!u) break;
+        done.add(u);
+        for (const [v, w] of adj.get(u)) {
+          const nd = dist.get(u) + w;
+          if (!dist.has(v) || nd < dist.get(v)) { dist.set(v, nd); prev.set(v, u); }
+        }
+      }
+      for (let j = i + 1; j < towns.length; j++) {
+        if (!prev.has(towns[j])) continue;
+        for (let m = prev.get(towns[j]); m && m !== towns[i]; m = prev.get(m)) {
+          routeScore.set(m.id, (routeScore.get(m.id) || 0) + 1);
+        }
+      }
+    }
+    for (const s of routeScore.values()) maxRouteScore = Math.max(maxRouteScore, s);
+  }
+
+  // Numbered series ("East Rocky Mountain I".."VII", "Line 1 Area 1".."3"): linked runs of
+  // maps sharing a base name. When zoomed out, Smart labels name the run once along its
+  // length instead of labelling each map.
+  const series = [];
+  {
+    const ROMAN = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
+    const byBase = new Map();
+    for (const m of maps) {
+      const mm = m.name.match(/^(.+?)\s+(I|II|III|IV|V|VI|VII|VIII|IX|X|\d+)$/);
+      if (!mm) continue;
+      if (!byBase.has(mm[1])) byBase.set(mm[1], []);
+      byBase.get(mm[1]).push({ m, n: ROMAN[mm[2]] || +mm[2] });
+    }
+    for (const [base, list] of byBase) {
+      const plain = maps.find((m) => m.name === base); // "Pig Park" with "Pig Park II"
+      if (plain) list.push({ m: plain, n: 1 });
+      const inSet = new Set(list.map((x) => x.m));
+      const seen = new Set();
+      for (const { m } of list) { // split into linked runs
+        if (seen.has(m)) continue;
+        const comp = [], stack = [m];
+        seen.add(m);
+        while (stack.length) {
+          const u = stack.pop();
+          comp.push(u);
+          for (const { map: v } of neighbors.get(u.id)) if (inSet.has(v) && !seen.has(v)) { seen.add(v); stack.push(v); }
+        }
+        if (comp.length >= 2) series.push({ base, members: comp, key: `${base}|${comp[0].id}` });
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
+  const MAX_LEVEL = 100; // classic MapleStory's current level cap (also in index.html)
+  const state = {
+    level: 30,
+    selected: null,
+    hover: null,
+    showHidden: true,
+    labelMode: "smart", // "none" | "smart" | "all"
+    showBuildings: false,
+    showForgottenHollow: false,
+    edit: false,
+    mobHit: null, // { ids, maps: Set } while a monster search is highlighting maps
+  };
+  const cam = { x: 0, y: 0, s: 1 }; // screen = world * s + (x, y)
+  let W = 0, H = 0, dpr = 1;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem("wm-prefs") || "{}");
+    if (saved.level) state.level = clampInt(saved.level, 1, MAX_LEVEL);
+    if (typeof saved.showHidden === "boolean") state.showHidden = saved.showHidden;
+    if (["none", "smart", "all"].includes(saved.labelMode)) state.labelMode = saved.labelMode;
+    else if (saved.showLabels === true) state.labelMode = "all"; // old "Always show labels"
+    if (typeof saved.showBuildings === "boolean") state.showBuildings = saved.showBuildings;
+    if (typeof saved.showForgottenHollow === "boolean") state.showForgottenHollow = saved.showForgottenHollow;
+  } catch (_) { /* storage unavailable */ }
+
+  function savePrefs() {
+    try {
+      localStorage.setItem("wm-prefs", JSON.stringify({
+        level: state.level, showHidden: state.showHidden, labelMode: state.labelMode,
+        showBuildings: state.showBuildings, showForgottenHollow: state.showForgottenHollow,
+      }));
+    } catch (_) { /* ignore */ }
+  }
+
+  function isVisible(m) {
+    if (m.area === "forgotten_hollow" && !state.showForgottenHollow) return false;
+    if (m.type === "hidden") return state.showHidden;
+    if (m.type === "building") return state.showBuildings;
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Geometry helpers
+  // ---------------------------------------------------------------------------
+  function clampInt(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(+v || lo))); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hashStr(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+
+  // Smooth closed/open curve through points (Catmull-Rom as Bezier).
+  function splinePath(pts, closed = true, path = new Path2D()) {
+    const n = pts.length;
+    const P = (i) => closed ? pts[(i + n) % n] : pts[clamp(i, 0, n - 1)];
+    path.moveTo(pts[0][0], pts[0][1]);
+    const segs = closed ? n : n - 1;
+    for (let i = 0; i < segs; i++) {
+      const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+      path.bezierCurveTo(
+        p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6,
+        p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6,
+        p2[0], p2[1]);
+    }
+    if (closed) path.closePath();
+    return path;
+  }
+
+  function inPoly(x, y, pts) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
+  function bbox(pts) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    return { x0, y0, x1, y1 };
+  }
+
+  // Curve for an edge: a gentle bend so paths look hand-drawn.
+  function edgeCurve(e) {
+    if (e.via && e.via.length) {
+      return { pts: [[e.a.x, e.a.y], ...e.via, [e.b.x, e.b.y]], spline: true };
+    }
+    const a = endpoint(e.a, e.b), b = endpoint(e.b, e.a);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const h = (hashStr(e.key) % 1000) / 1000 - 0.5;
+    // Section maps sit on a tidy tree, so their links stay straight.
+    const off = e.a.section || e.b.section ? 0 : h * 0.3 * len;
+    return {
+      a, b, len,
+      cx: (a.x + b.x) / 2 - (dy / len) * off,
+      cy: (a.y + b.y) / 2 + (dx / len) * off,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sections: areas cut out of the island (e.g. everything behind Sleepywood) and drawn
+  // as a tree in their own panel. Links from the section's root map start at the
+  // panel's entrance marker instead of at the root itself.
+  // ---------------------------------------------------------------------------
+  const sections = (DATA.sections || []).map((s) => ({
+    ...s, rootMap: byId.get(s.root), members: maps.filter((m) => m.section === s.id),
+  }));
+  const sectionById = new Map(sections.map((s) => [s.id, s]));
+
+  function endpoint(m, other) {
+    const s = other.section && sectionById.get(other.section);
+    if (s && s.root === m.id) return { ...m, x: s.entry.x, y: s.entry.y, type: "stub", worldMapDot: false };
+    return m;
+  }
+
+  // A section is shown when any of its maps is (Forgotten Hollow can be toggled off).
+  const sectionShown = (s) => s.members.some(isVisible);
+  // Sections whose root is far from the panel get a small portal marker by the root instead
+  // of a stairway; clicking it jumps to the panel.
+  function portalPos(s) {
+    return s.portal && s.rootMap ? [s.rootMap.x + s.portal.dx, s.rootMap.y + s.portal.dy] : null;
+  }
+
+  function sectionBox(s, pad = 95) {
+    let x0 = s.entry.x, y0 = s.entry.y, x1 = s.entry.x, y1 = s.entry.y;
+    for (const m of s.members) {
+      if (!isVisible(m)) continue;
+      x0 = Math.min(x0, m.x); y0 = Math.min(y0, m.y); x1 = Math.max(x1, m.x); y1 = Math.max(y1, m.y);
+    }
+    return { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
+  }
+
+  function drawSections() {
+    setWorldTransform();
+    for (const s of sections) {
+      if (!sectionShown(s)) continue;
+      const b = sectionBox(s);
+      const r = 60;
+      const plate = new Path2D();
+      plate.roundRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, r);
+      ctx.save();
+      ctx.shadowColor = "rgba(10,20,40,.45)";
+      ctx.shadowBlur = 40 * cam.s;
+      ctx.shadowOffsetY = 18 * cam.s;
+      ctx.fillStyle = "#2c2638";
+      ctx.fill(plate);
+      ctx.restore();
+      ctx.strokeStyle = "#120e18";
+      ctx.lineWidth = 10;
+      ctx.stroke(plate);
+      ctx.strokeStyle = "rgba(184,151,255,.25)";
+      ctx.lineWidth = 3;
+      const inner = new Path2D();
+      inner.roundRect(b.x0 + 14, b.y0 + 14, b.x1 - b.x0 - 28, b.y1 - b.y0 - 28, r - 14);
+      ctx.stroke(inner);
+
+      // Stairway from the root map on the island down to the panel's entrance.
+      const root = s.rootMap;
+      if (root && s.stair !== false) {
+        const p = new Path2D();
+        p.moveTo(root.x, root.y);
+        p.bezierCurveTo(root.x, (root.y + s.entry.y) / 2, s.entry.x, (root.y + s.entry.y) / 2, s.entry.x, s.entry.y);
+        ctx.lineCap = "round";
+        ctx.setLineDash([]);
+        ctx.strokeStyle = "rgba(20,14,30,.55)";
+        ctx.lineWidth = 26;
+        ctx.stroke(p);
+        ctx.setLineDash([22, 16]);
+        ctx.strokeStyle = "#b897ff";
+        ctx.lineWidth = 9;
+        ctx.stroke(p);
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
+  // Entrance markers and titles, drawn in screen space on top of the nodes.
+  function drawSectionMarkers() {
+    setScreenTransform();
+    const k = nodeScale();
+    for (const s of sections) {
+      if (!sectionShown(s)) continue;
+      const pp = portalPos(s);
+      if (pp) {
+        const [px, py] = worldToScreen(pp[0], pp[1]);
+        const pr = 11 * k;
+        ctx.beginPath(); ctx.arc(px, py, pr + 3, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(184,151,255,.35)"; ctx.fill();
+        ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2);
+        ctx.fillStyle = "#6b5b8a"; ctx.fill();
+        ctx.strokeStyle = "#120e18"; ctx.lineWidth = 2.5; ctx.stroke();
+        ctx.beginPath(); // down arrow
+        ctx.moveTo(px, py - pr * 0.5); ctx.lineTo(px, py + pr * 0.45);
+        ctx.moveTo(px - pr * 0.4, py + pr * 0.05); ctx.lineTo(px, py + pr * 0.45); ctx.lineTo(px + pr * 0.4, py + pr * 0.05);
+        ctx.strokeStyle = "#f3ead2"; ctx.lineWidth = 2; ctx.stroke();
+        portalTag(`To ${s.name}`, px, py - pr - 13);
+      }
+      const [x, y] = worldToScreen(s.entry.x, s.entry.y);
+      const r = 13 * k;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = "#6b5b8a"; ctx.fill();
+      ctx.strokeStyle = "#120e18"; ctx.lineWidth = 2.5; ctx.stroke();
+      // little staircase glyph
+      ctx.beginPath();
+      const u = r * 0.28;
+      ctx.moveTo(x - 2 * u, y - 1.5 * u);
+      ctx.lineTo(x - u, y - 1.5 * u); ctx.lineTo(x - u, y - 0.5 * u);
+      ctx.lineTo(x, y - 0.5 * u); ctx.lineTo(x, y + 0.5 * u);
+      ctx.lineTo(x + u, y + 0.5 * u); ctx.lineTo(x + u, y + 1.5 * u); ctx.lineTo(x + 2 * u, y + 1.5 * u);
+      ctx.strokeStyle = "#f3ead2"; ctx.lineWidth = 2; ctx.stroke();
+      if (s.rootMap) label(`↑ ${s.label || s.rootMap.name}`, x, y + r + 12, 12, "#e8e0ff", "#120e18");
+      const b = sectionBox(s);
+      const [bx, by] = worldToScreen((b.x0 + b.x1) / 2, b.y0);
+      banner(s.name, bx, by);
+    }
+  }
+
+  // Small dark-purple tag over a section portal (matches the section plates).
+  const PORTAL_FONT = `700 11px Fredoka, "Segoe UI", sans-serif`;
+  function portalTagSize(text) { return { w: textWidth(text, PORTAL_FONT) + 14, h: 18 }; }
+  function portalTag(text, x, y) {
+    const { w, h } = portalTagSize(text);
+    ctx.fillStyle = "rgba(0,0,0,.25)";
+    roundRect(x - w / 2 + 1, y - h / 2 + 2, w, h, h / 2); ctx.fill();
+    roundRect(x - w / 2, y - h / 2, w, h, h / 2);
+    ctx.fillStyle = "#2c2638"; ctx.fill();
+    ctx.strokeStyle = "#b897ff"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.font = PORTAL_FONT;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#e8e0ff";
+    ctx.fillText(text, x, y + 0.5);
+  }
+
+  // Screen boxes (see boxesOverlap) of what drawSectionMarkers draws, so smart labels
+  // stay off section banners, entry markers and portals.
+  function sectionMarkerBoxes() {
+    const out = [], k = nodeScale();
+    const bannerBox = (text, x, y, size) => {
+      const w = textWidth(text, `700 ${size}px "Alegreya SC", Georgia, serif`) + 34 * size / 15;
+      return { cx: x, cy: y, hw: w / 2, hh: 16 * size / 15, ang: 0 };
+    };
+    for (const s of sections) {
+      if (!sectionShown(s)) continue;
+      const pp = portalPos(s);
+      if (pp) {
+        const [px, py] = worldToScreen(pp[0], pp[1]), pr = 11 * k;
+        const tag = portalTagSize(`To ${s.name}`);
+        out.push({ cx: px, cy: py, hw: pr + 3, hh: pr + 3, ang: 0 }, { cx: px, cy: py - pr - 13, hw: tag.w / 2, hh: tag.h / 2, ang: 0 });
+      }
+      const [x, y] = worldToScreen(s.entry.x, s.entry.y), r = 13 * k;
+      out.push({ cx: x, cy: y, hw: r, hh: r, ang: 0 });
+      if (s.rootMap) {
+        const t = `↑ ${s.label || s.rootMap.name}`, w = textWidth(t, LABEL_FONT);
+        out.push({ cx: x, cy: y + r + 12, hw: w / 2 + 3, hh: 8, ang: 0 });
+      }
+      const b = sectionBox(s);
+      const [bx, by] = worldToScreen((b.x0 + b.x1) / 2, b.y0);
+      out.push(bannerBox(s.name, bx, by, 15));
+    }
+    return out;
+  }
+
+  // Screen boxes of the HUD cards and the open side panel, so labels don't hide under them.
+  function hudBoxes() {
+    const canvasRect = canvas.getBoundingClientRect();
+    const out = [];
+    for (const el of document.querySelectorAll("#hud .card, #legend, #zoomCtl, #editBar, #panel")) {
+      if (el.id === "panel" && !document.body.classList.contains("panel-open")) continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height || getComputedStyle(el).display === "none") continue;
+      out.push({ cx: r.left - canvasRect.left + r.width / 2, cy: r.top - canvasRect.top + r.height / 2, hw: r.width / 2, hh: r.height / 2, ang: 0 });
+    }
+    return out;
+  }
+
+  function hitSectionEntry(sx, sy) {
+    for (const s of sections) {
+      if (!sectionShown(s)) continue;
+      const [x, y] = worldToScreen(s.entry.x, s.entry.y);
+      if (Math.hypot(x - sx, y - sy) < 13 * nodeScale() + 7) return s.rootMap;
+      const pp = portalPos(s);
+      if (pp) {
+        const [px, py] = worldToScreen(pp[0], pp[1]);
+        // The portal stands for the section's first map past the root.
+        if (Math.hypot(px - sx, py - sy) < 11 * nodeScale() + 7) return (neighbors.get(s.root) || []).map((n) => n.map).find((m) => m.section === s.id) || null;
+      }
+    }
+    return null;
+  }
+
+  function quadAt(c, t) {
+    const u = 1 - t;
+    return [u * u * c.a.x + 2 * u * t * c.cx + t * t * c.b.x, u * u * c.a.y + 2 * u * t * c.cy + t * t * c.b.y];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Terrain (built once into Path2D batches)
+  // ---------------------------------------------------------------------------
+  const terrain = { islands: [], biomes: [], rivers: [], decor: [], clouds: null, waves: null };
+
+  function buildTerrain() {
+    for (const isl of DATA.islands) {
+      const path = splinePath(isl.points);
+      const cliff = new Path2D();
+      cliff.addPath(path, new DOMMatrix().translate(0, 22 * DS));
+      terrain.islands.push({ ...isl, path, cliff });
+    }
+    for (const b of DATA.biomes) terrain.biomes.push({ ...b, path: splinePath(b.points) });
+    for (const r of DATA.rivers || []) terrain.rivers.push({ ...r, path: splinePath(r.points, false) });
+    buildDecor();
+    buildClouds();
+  }
+
+  // Cells near nodes/edges are kept clear of decorations.
+  function blockedGrid() {
+    const cell = 24;
+    const set = new Set();
+    const mark = (x, y, r) => {
+      for (let gx = Math.floor((x - r) / cell); gx <= Math.floor((x + r) / cell); gx++)
+        for (let gy = Math.floor((y - r) / cell); gy <= Math.floor((y + r) / cell); gy++) set.add(gx + "," + gy);
+    };
+    for (const m of maps) mark(m.x, m.y, 34);
+    for (const e of edges) {
+      if (e.kind !== "walk") continue;
+      const c = edgeCurve(e);
+      const n = Math.ceil(c.len / 12);
+      for (let i = 0; i <= n; i++) { const [x, y] = quadAt(c, i / n); mark(x, y, 10); }
+    }
+    return (x, y) => set.has(Math.floor(x / cell) + "," + Math.floor(y / cell));
+  }
+
+  const DECOR_STYLES = {
+    trees:     { canopy: "#5ea446", hi: "#6db354", dark: "#3f7a32", trunk: "#7a5434", size: [9, 14] },
+    bigtrees:  { canopy: "#3f9440", hi: "#4fa44a", dark: "#2d6e30", trunk: "#6a4a2c", size: [12, 19] },
+    darktrees: { canopy: "#3b5f3e", hi: "#456c46", dark: "#2a4a2d", trunk: "#4d3826", size: [10, 16] },
+    palms:     { canopy: "#64bb50", hi: "#78c862", dark: "#428a36", trunk: "#8a5a2b", size: [7, 11] },
+  };
+
+  // Minimum spacing (decor units) between items, so big shapes don't overlap into clutter.
+  const DECOR_GAP = { mesas: 62, buildings: 30, hills: 55 };
+
+  function newGroup(fill, stroke, lw, mode = "fill") { return { path: new Path2D(), fill, stroke, lw, mode }; }
+
+  function buildDecor() {
+    const rng = mulberry32(1337);
+    const blocked = blockedGrid();
+    const items = [];
+
+    // Which decor zone a point is in: the last biome that contains it, else its island.
+    function zoneAt(x, y) {
+      for (let i = DATA.biomes.length - 1; i >= 0; i--) {
+        if (inPoly(x, y, DATA.biomes[i].points)) return DATA.biomes[i];
+      }
+      for (const isl of DATA.islands) if (inPoly(x, y, isl.points)) return isl;
+      return null;
+    }
+
+    const zones = [...DATA.islands, ...DATA.biomes];
+    for (const z of zones) {
+      if (!z.decor || z.decor.type === "none") continue;
+      const bb = bbox(z.points);
+      const count = Math.round(((bb.x1 - bb.x0) * (bb.y1 - bb.y0) / 10000 / (DS * DS)) * (z.decor.density || 1));
+      for (let k = 0; k < count; k++) {
+        const x = bb.x0 + rng() * (bb.x1 - bb.x0);
+        const y = bb.y0 + rng() * (bb.y1 - bb.y0);
+        if (zoneAt(x, y) !== z) continue;
+        if (!DATA.islands.some((isl) => inPoly(x, y - 16 * DS, isl.points))) continue; // keep off the cliff edge
+        if (blocked(x, y)) continue;
+        const gap = DECOR_GAP[z.decor.type] || 0;
+        if (gap && items.some((it) => Math.hypot(it.x - x / DS, it.y - y / DS) < gap)) continue;
+        // Decor shapes are built in a space shrunk by DS and drawn scaled back up.
+        items.push({ type: z.decor.type, x: x / DS, y: y / DS, r: rng() });
+      }
+    }
+    items.sort((p, q) => p.y - q.y);
+
+    // Batch each look into a few paths. Draw "outline" groups as a thick stroke first,
+    // then fill on top, so overlapping shapes merge into clumps.
+    const G = {};
+    const g = (key, ...args) => (G[key] ||= newGroup(...args));
+    const order = [];
+    const use = (key, ...args) => { if (!G[key]) order.push(key); return g(key, ...args); };
+
+    for (const it of items) {
+      const { x, y, r } = it;
+      switch (it.type) {
+        case "trees": case "bigtrees": case "darktrees": case "palms": {
+          const st = DECOR_STYLES[it.type];
+          const size = st.size[0] + r * (st.size[1] - st.size[0]);
+          const shadow = use(it.type + "-shadow", "rgba(0,0,0,.12)").path;
+          shadow.moveTo(x + 2 + size * 0.9, y + 3); // new sub-path, or shadows get joined into one big polygon
+          shadow.ellipse(x + 2, y + 3, size * 0.9, size * 0.35, 0, 0, Math.PI * 2);
+          use(it.type + "-trunk", st.trunk).path.rect(x - 1.8, y - size * 0.4, 3.6, size * 0.6);
+          const cy = y - size * 0.9;
+          const canopyOutline = use(it.type + "-outline", null, st.dark, 3, "stroke").path;
+          const canopy = use(it.type + "-canopy", st.canopy).path;
+          if (it.type === "palms") {
+            for (let a = 0; a < 5; a++) {
+              const ang = -Math.PI / 2 + (a - 2) * 0.62;
+              const ex = x + Math.cos(ang) * size * 1.3, ey = cy + Math.sin(ang) * size * 0.9 + size * 0.4;
+              for (const p of [canopyOutline, canopy]) {
+                p.moveTo(x, cy);
+                p.quadraticCurveTo(x + Math.cos(ang) * size * 0.8, cy + Math.sin(ang) * size - 4, ex, ey);
+                p.quadraticCurveTo(x + Math.cos(ang) * size * 0.6, cy + Math.sin(ang) * size * 0.4 + 2, x, cy);
+              }
+            }
+          } else {
+            for (const p of [canopyOutline, canopy]) {
+              p.moveTo(x + size, cy); p.arc(x, cy, size, 0, Math.PI * 2);
+              p.moveTo(x - size * 0.45 + size * 0.6, cy + size * 0.35); p.arc(x - size * 0.45, cy + size * 0.35, size * 0.6, 0, Math.PI * 2);
+              p.moveTo(x + size * 0.5 + size * 0.55, cy + size * 0.3); p.arc(x + size * 0.5, cy + size * 0.3, size * 0.55, 0, Math.PI * 2);
+            }
+            const hp = use(it.type + "-hi", st.hi).path;
+            hp.moveTo(x - size * 0.25 + size * 0.38, cy - size * 0.35);
+            hp.arc(x - size * 0.25, cy - size * 0.35, size * 0.38, 0, Math.PI * 2);
+          }
+          break;
+        }
+        case "mesas": {
+          const w = 26 + r * 30, h = 10 + r * 12;
+          const side = use("mesa-side", "#c08a4c", "#9a6a3a", 1.5, "both").path;
+          side.moveTo(x - w / 2, y - h);
+          side.lineTo(x - w / 2 + 5, y);
+          side.lineTo(x + w / 2 - 5, y);
+          side.lineTo(x + w / 2, y - h);
+          side.closePath();
+          const shade = use("mesa-shade", "#b27d44").path;
+          shade.moveTo(x + w * 0.15, y - h); shade.lineTo(x + w / 2, y - h); shade.lineTo(x + w / 2 - 5, y); shade.lineTo(x + w * 0.1, y); shade.closePath();
+          const top = use("mesa-top", "#e6c58a", "#9a6a3a", 1.5, "both").path;
+          top.moveTo(x + w / 2, y - h); top.ellipse(x, y - h, w / 2, w / 7, 0, 0, Math.PI * 2);
+          break;
+        }
+        case "deadtrees": {
+          const s = 9 + r * 8;
+          const p = use("dead", null, "#7d6a52", 2, "stroke").path;
+          p.moveTo(x, y); p.lineTo(x, y - s * 1.6);
+          p.moveTo(x, y - s * 0.9); p.lineTo(x - s * 0.6, y - s * 1.5);
+          p.moveTo(x, y - s * 1.2); p.lineTo(x + s * 0.55, y - s * 1.8);
+          p.moveTo(x - s * 0.35, y - s * 1.25); p.lineTo(x - s * 0.7, y - s * 1.2);
+          break;
+        }
+        case "buildings": {
+          const w = 16 + r * 18, h = 16 + ((r * 7.3) % 1) * 26;
+          use("bld-shadow", "rgba(0,0,0,.12)").path.rect(x - w / 2 + 4, y - 2, w, 6);
+          use("bld", "#9aa1a8", "#6b7279", 1.5, "both").path.rect(x - w / 2, y - h, w, h);
+          use("bld-roof", "#b9c0c6", "#6b7279", 1.5, "both").path.rect(x - w / 2 - 2, y - h - 5, w + 4, 6);
+          const win = use("bld-win", "#e9d48c").path;
+          for (let wy = y - h + 6; wy < y - 5; wy += 7) for (let wx = x - w / 2 + 3; wx < x + w / 2 - 3; wx += 6) if (((wx * 7 + wy * 3) | 0) % 3 === 0) win.rect(wx, wy, 3, 3);
+          break;
+        }
+        case "hills": {
+          const w = 40 + r * 40, h = 30 + r * 26;
+          const p = use("hill", "#7cb64e", "#5f9a3c", 1.5, "both").path;
+          p.moveTo(x - w / 2, y);
+          p.quadraticCurveTo(x - w * 0.12, y - h * 1.1, x, y - h);
+          p.quadraticCurveTo(x + w * 0.12, y - h * 1.1, x + w / 2, y);
+          p.closePath();
+          const s = use("hill-shade", "#6ea845").path;
+          s.moveTo(x, y - h); s.quadraticCurveTo(x + w * 0.12, y - h * 1.1, x + w / 2, y); s.lineTo(x + w * 0.05, y); s.closePath();
+          break;
+        }
+        case "rocks": {
+          const s = 5 + r * 9;
+          const p = use("rock", "#5a5168", "#1d1826", 2, "both").path;
+          p.moveTo(x + s, y); p.ellipse(x, y, s, s * 0.6, 0, 0, Math.PI * 2);
+          const glow = use("rock-crystal", "#9b7bea").path;
+          if (r > 0.82) { glow.moveTo(x, y - s * 1.8); glow.lineTo(x + 3, y - s * 0.5); glow.lineTo(x - 3, y - s * 0.5); glow.closePath(); }
+          break;
+        }
+      }
+    }
+    terrain.decor = order.map((k) => G[k]);
+  }
+
+  function buildClouds() {
+    const rng = mulberry32(99);
+    const { width: WW, height: HH } = DATA.meta;
+    const outline = new Path2D(), fill = new Path2D();
+    const waves = new Path2D();
+    let placed = 0, tries = 0;
+    while (placed < 46 && tries < 4000) {
+      tries++;
+      const x = -150 * DS + rng() * (WW + 300 * DS), y = -150 * DS + rng() * (HH + 300 * DS);
+      const edgeDist = Math.min(x, y, WW - x, HH - y);
+      if (edgeDist > 170 * DS && rng() > 0.05) continue;
+      if (DATA.islands.some((isl) => inPoly(x, y, isl.points))) continue;
+      if (maps.some((m) => Math.hypot(m.x - x, m.y - y) < 150 * DS)) continue;
+      if (sections.some((s) => { const b = sectionBox(s, 380); return x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1; })) continue;
+      const puffs = 4 + Math.floor(rng() * 4);
+      const base = (26 + rng() * 26) * DS;
+      for (let i = 0; i < puffs; i++) {
+        const px = x + (i - puffs / 2) * base * 0.8 + rng() * 10, py = y - Math.sin((i / (puffs - 1)) * Math.PI) * base * 0.6 + rng() * 8;
+        const pr = base * (0.6 + rng() * 0.5);
+        for (const p of [outline, fill]) { p.moveTo(px + pr, py); p.arc(px, py, pr, 0, Math.PI * 2); }
+      }
+      placed++;
+    }
+    // little wave marks on open water
+    for (let i = 0; i < 160; i++) {
+      const x = rng() * WW, y = rng() * HH, w = 10 * DS;
+      if (DATA.islands.some((isl) => inPoly(x, y, isl.points) || inPoly(x, y - 40 * DS, isl.points))) continue;
+      waves.moveTo(x - w, y); waves.quadraticCurveTo(x - w / 2, y - w / 2, x, y); waves.quadraticCurveTo(x + w / 2, y - w / 2, x + w, y);
+    }
+    terrain.clouds = { outline, fill };
+    terrain.waves = waves;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Drawing
+  // ---------------------------------------------------------------------------
+  function worldToScreen(x, y) { return [x * cam.s + cam.x, y * cam.s + cam.y]; }
+  function screenToWorld(x, y) { return [(x - cam.x) / cam.s, (y - cam.y) / cam.s]; }
+
+  function setWorldTransform() { ctx.setTransform(dpr * cam.s, 0, 0, dpr * cam.s, dpr * cam.x, dpr * cam.y); }
+  function setScreenTransform() { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+
+  function drawGroup(gr) {
+    if (gr.mode === "stroke") {
+      ctx.strokeStyle = gr.stroke; ctx.lineWidth = gr.lw; ctx.stroke(gr.path);
+    } else if (gr.mode === "both") {
+      ctx.fillStyle = gr.fill; ctx.fill(gr.path);
+      ctx.strokeStyle = gr.stroke; ctx.lineWidth = gr.lw; ctx.stroke(gr.path);
+    } else {
+      ctx.fillStyle = gr.fill; ctx.fill(gr.path);
+    }
+  }
+
+  function drawTerrain() {
+    // ocean
+    setScreenTransform();
+    const grd = ctx.createLinearGradient(0, 0, 0, H);
+    grd.addColorStop(0, "#5cb8e8");
+    grd.addColorStop(1, "#3f9bd3");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, H);
+
+    setWorldTransform();
+    const { width: WW, height: HH } = DATA.meta;
+    // chart grid
+    ctx.strokeStyle = "rgba(255,255,255,.14)";
+    ctx.lineWidth = 1 / cam.s;
+    ctx.beginPath();
+    const step = 100 * DS, pad = 1000;
+    for (let x = -pad; x <= WW + pad; x += step) { ctx.moveTo(x, -pad); ctx.lineTo(x, HH + pad); }
+    for (let y = -pad; y <= HH + pad; y += step) { ctx.moveTo(-pad, y); ctx.lineTo(WW + pad, y); }
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255,255,255,.45)";
+    ctx.lineWidth = 2 * DS;
+    ctx.lineCap = "round";
+    ctx.stroke(terrain.waves);
+
+    for (const isl of terrain.islands) {
+      // shallow water halo
+      ctx.strokeStyle = "rgba(190,235,255,.45)";
+      ctx.lineWidth = 46 * DS;
+      ctx.lineJoin = "round";
+      ctx.stroke(isl.cliff);
+      // cliff face
+      ctx.fillStyle = "#8a6036";
+      ctx.fill(isl.cliff);
+      ctx.strokeStyle = "#3b2716";
+      ctx.lineWidth = 4 * DS;
+      ctx.stroke(isl.cliff);
+    }
+    for (const isl of terrain.islands) {
+      ctx.fillStyle = isl.fill;
+      ctx.fill(isl.path);
+    }
+
+    // biomes clipped to land
+    ctx.save();
+    const clip = new Path2D();
+    for (const isl of terrain.islands) clip.addPath(isl.path);
+    ctx.clip(clip);
+    for (const b of terrain.biomes) {
+      ctx.fillStyle = b.fill;
+      ctx.fill(b.path);
+      ctx.strokeStyle = b.edge || "rgba(0,0,0,.15)";
+      ctx.lineWidth = 2 * DS;
+      ctx.stroke(b.path);
+    }
+    for (const r of terrain.rivers) {
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.strokeStyle = "#2d5b4a"; ctx.lineWidth = r.width + 6; ctx.stroke(r.path);
+      ctx.strokeStyle = "#4fa58f"; ctx.lineWidth = r.width; ctx.stroke(r.path);
+      ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 2; ctx.setLineDash([10, 14]); ctx.stroke(r.path); ctx.setLineDash([]);
+    }
+    ctx.restore();
+
+    for (const isl of terrain.islands) {
+      ctx.strokeStyle = "#3b2716";
+      ctx.lineWidth = 4 * DS;
+      ctx.stroke(isl.path);
+    }
+
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.save();
+    ctx.scale(DS, DS);
+    for (const gr of terrain.decor) drawGroup(gr);
+    ctx.restore();
+  }
+
+  // Dark cave backdrop under underground maps, built from where those maps actually are:
+  // a blob around each underground map, joined along the links between them.
+  function drawCaves() {
+    setWorldTransform();
+    const R = 58;
+    // Section maps already sit on their own dark panel.
+    const under = maps.filter((m) => m.layer === "underground" && isVisible(m) && !m.section);
+    const links = edges.filter((e) => e.kind === "walk" && e.a.layer === "underground" && e.b.layer === "underground"
+      && isVisible(e.a) && isVisible(e.b) && !e.a.section && !e.b.section);
+    const shape = (extra, color) => {
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      ctx.lineCap = "round";
+      ctx.lineWidth = (R + extra) * 2;
+      ctx.beginPath();
+      for (const e of links) {
+        const c = edgeCurve(e);
+        ctx.moveTo(c.a.x, c.a.y);
+        ctx.quadraticCurveTo(c.cx, c.cy, c.b.x, c.b.y);
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      for (const m of under) { ctx.moveTo(m.x + R + extra, m.y); ctx.arc(m.x, m.y, R + extra, 0, Math.PI * 2); }
+      ctx.fill();
+    };
+    shape(14, "rgba(30,24,40,.35)");
+    shape(6, "#1d1826");
+    shape(0, "#3a3348");
+  }
+
+  function drawClouds() {
+    setWorldTransform();
+    ctx.strokeStyle = "#5a6f93";
+    ctx.lineWidth = 7 * DS;
+    ctx.stroke(terrain.clouds.outline);
+    ctx.fillStyle = "#fbfdff";
+    ctx.fill(terrain.clouds.fill);
+  }
+
+  // Solid links: `color` line `width` px wide over a darker `casing` a little wider.
+  const EDGE_STYLE = {
+    walk:        { color: "rgba(240,212,130,.9)",  casing: "rgba(90,60,20,.3)",  width: 3.2 },
+    underground: { color: "rgba(196,170,255,.85)", casing: "rgba(30,20,60,.45)", width: 3.2 },
+    hidden:      { color: "rgba(250,240,205,.85)", casing: "rgba(90,70,30,.25)", width: 2.2 },
+  };
+
+  function edgeStyleKey(e) {
+    if (e.a.type === "hidden" || e.b.type === "hidden" || e.a.type === "building" || e.b.type === "building") return "hidden";
+    if (e.a.layer === "underground" && e.b.layer === "underground") return "underground";
+    return "walk";
+  }
+
+  function drawEdges() {
+    setScreenTransform();
+    const sel = state.selected;
+    for (const e of edges) {
+      if (!isVisible(e.a) || !isVisible(e.b)) continue;
+      const hot = sel && (e.a === sel || e.b === sel);
+      const c = edgeCurve(e);
+
+      if (c.pts) { // boat / travel route
+        const pts = c.pts.map(([x, y]) => worldToScreen(x, y));
+        const p = splinePath(pts, false);
+        ctx.setLineDash([10, 9]);
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "rgba(30,60,100,.5)"; ctx.lineWidth = hot ? 6 : 5; ctx.stroke(p);
+        ctx.strokeStyle = hot ? "#fff" : "rgba(255,255,255,.9)"; ctx.lineWidth = hot ? 3.5 : 2.5; ctx.stroke(p);
+        ctx.setLineDash([]);
+        if (e.label) {
+          const mid = pts[Math.floor(pts.length / 2)];
+          label(e.label, mid[0], mid[1] - 10, 12, "#fff", "#1e3c64");
+        }
+        continue;
+      }
+
+      const st = EDGE_STYLE[edgeStyleKey(e)];
+      const sx = worldToScreen(c.a.x, c.a.y), ex = worldToScreen(c.b.x, c.b.y), cc = worldToScreen(c.cx, c.cy);
+      const k = clamp(cam.s, 0.7, 1.25) * (hot ? 1.3 : 1);
+      ctx.beginPath();
+      ctx.moveTo(sx[0], sx[1]);
+      ctx.quadraticCurveTo(cc[0], cc[1], ex[0], ex[1]);
+      ctx.lineCap = "round";
+      ctx.strokeStyle = hot ? "rgba(255,255,255,.6)" : st.casing;
+      ctx.lineWidth = st.width * k + 3;
+      ctx.stroke();
+      ctx.strokeStyle = st.color;
+      ctx.lineWidth = st.width * k;
+      ctx.stroke();
+    }
+  }
+
+  function nodeScale() { return clamp(cam.s, 0.6, 1.35); }
+  function nodeRadius(m) {
+    const k = nodeScale();
+    if (m.type === "town") return 13 * k;
+    if (m.type === "boss") return 13 * k;
+    if (m.type === "safe") return 7 * k;
+    if (m.type === "building") return 5 * k;
+    // Maps the game's own world map shows as a dot are drawn a little bigger.
+    return (m.worldMapDot ? 10.5 : 8.5) * k;
+  }
+
+  function label(text, x, y, size, fill = "#fff", stroke = "#2b1a0e", weight = 600) {
+    ctx.font = `${weight} ${size}px Fredoka, "Segoe UI", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = Math.max(3, size * 0.3);
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = fill;
+    ctx.fillText(text, x, y);
+  }
+
+  // `size` is the font size; the scroll scales with it (towns use 15).
+  function banner(text, x, y, size = 15) {
+    const k = size / 15;
+    ctx.font = `700 ${size}px "Alegreya SC", Georgia, serif`;
+    const tw = ctx.measureText(text).width;
+    const w = tw + 26 * k, h = 24 * k, rw = 8 * k;
+    const x0 = x - w / 2, y0 = y - h / 2;
+    ctx.fillStyle = "rgba(0,0,0,.25)";
+    ctx.fillRect(x0 + 2, y0 + 4, w, h);
+    ctx.fillStyle = "#f6ecd2";
+    ctx.strokeStyle = "#3a2614";
+    ctx.lineWidth = 2;
+    ctx.fillRect(x0, y0, w, h);
+    ctx.strokeRect(x0, y0, w, h);
+    for (const rx of [x0 - rw / 2, x0 + w - rw / 2]) {
+      const gr = ctx.createLinearGradient(rx, 0, rx + rw, 0);
+      gr.addColorStop(0, "#24497f"); gr.addColorStop(0.5, "#4f82c8"); gr.addColorStop(1, "#24497f");
+      ctx.fillStyle = gr;
+      roundRect(rx, y0 - 4, rw, h + 8, 4);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#3a2614";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y + 1);
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function shapePath(type, x, y, r) {
+    ctx.beginPath();
+    if (type === "hidden") {
+      ctx.moveTo(x, y - r * 1.2); ctx.lineTo(x + r * 1.1, y); ctx.lineTo(x, y + r * 1.2); ctx.lineTo(x - r * 1.1, y); ctx.closePath();
+    } else if (type === "dungeon") {
+      roundRect(x - r, y - r, r * 2, r * 2, r * 0.35);
+    } else if (type === "boss") {
+      for (let i = 0; i < 12; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 6, rr = i % 2 ? r * 0.6 : r * 1.15;
+        i ? ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      }
+      ctx.closePath();
+    } else {
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
+  }
+
+  const bossMaps = new Set(maps.filter((m) => mobList(m).some((x) => x.boss)));
+
+  // Small skull badge; (cx, cy) is its center and s about half its width.
+  function drawSkull(cx, cy, s) {
+    ctx.beginPath();
+    ctx.arc(cx, cy - s * 0.15, s, Math.PI * 0.8, Math.PI * 2.2);
+    ctx.lineTo(cx + s * 0.6, cy + s * 0.85);
+    ctx.lineTo(cx - s * 0.6, cy + s * 0.85);
+    ctx.closePath();
+    ctx.fillStyle = "#f5f1e6"; ctx.fill();
+    ctx.strokeStyle = "#2b1a0e"; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.fillStyle = "#2b1a0e";
+    for (const dx of [-0.42, 0.42]) {
+      ctx.beginPath(); ctx.arc(cx + dx * s, cy - s * 0.1, s * 0.27, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.beginPath(); // nose
+    ctx.moveTo(cx, cy + s * 0.22); ctx.lineTo(cx - s * 0.12, cy + s * 0.45); ctx.lineTo(cx + s * 0.12, cy + s * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawNode(m, now) {
+    const [x, y] = worldToScreen(m.x, m.y);
+    const r = nodeRadius(m) * (state.hover === m ? 1.15 : 1);
+    if (x < -80 || y < -60 || x > W + 80 || y > H + 60) return;
+
+    if (state.selected === m) {
+      const pulse = (Math.sin(now / 260) + 1) / 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 7 + pulse * 5, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,255,255,${0.9 - pulse * 0.5})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    // Teal ring on every map with the searched monster.
+    const mobHit = !!state.mobHit && state.mobHit.maps.has(m);
+    if (mobHit) {
+      const pulse = (Math.sin(now / 300) + 1) / 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 9 + pulse * 3, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(120,230,215,.3)";
+      ctx.fill();
+      ctx.strokeStyle = "#7fe3d6";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    if (m.type === "town") {
+      ctx.save();
+      ctx.shadowColor = "rgba(120,210,255,.9)";
+      ctx.shadowBlur = 18;
+      const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, "#8fdcff"); g.addColorStop(1, "#1c6fd1");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = "#0f3a6e"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+      return { m, x, y: y + r + 20, priority: 0, banner: true };
+    }
+
+    const d = mapDiff(m);
+    const color = d ? DIFF[d].color : m.type === "building" ? "#f3ead2" : "#a9cbe8";
+
+    if (m.layer === "underground") {
+      ctx.beginPath(); ctx.arc(x, y, r + 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(155,123,234,.55)"; ctx.fill();
+    }
+
+    ctx.fillStyle = "rgba(0,0,0,.3)";
+    shapePath(m.type, x + 1.5, y + 2.5, r); ctx.fill();
+
+    shapePath(m.type, x, y, r);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = "#2b1a0e"; ctx.lineWidth = 2.2;
+    if (m.type === "hidden") ctx.setLineDash([3, 2]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // glossy highlight
+    ctx.beginPath();
+    ctx.arc(x - r * 0.3, y - r * 0.35, r * 0.32, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,.6)";
+    ctx.fill();
+
+    if (m.type === "safe") {
+      ctx.beginPath(); ctx.arc(x, y, r * 0.35, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+    }
+
+    if (bossMaps.has(m)) {
+      const s = 7 * nodeScale();
+      drawSkull(x + r * 0.85 + s * 0.3, y - r * 0.85 - s * 0.2, s);
+    }
+
+    const focus = state.hover === m || state.selected === m;
+    const lr = farmRange(m);
+    const lvText = lr && (cam.s >= 1.1 || focus) ? (lr.min === lr.max ? `Lv ${lr.min}` : `Lv ${lr.min}–${lr.max}`) : null;
+    return { m, x, y, r, color, lvText, focus, mobHit };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Labels. Modes (the Labels slider):
+  //   none:  only the hovered/selected map and search hits
+  //   smart: as many as fit, most important first, never over another label or node
+  //   all:   every map, overlaps allowed
+  // Smart order: hovered/selected, search hits, bosses, main roads between towns (by
+  // routeScore), numbered side paths named once along their length, then the rest.
+  // ---------------------------------------------------------------------------
+  const LABEL_FONT = `600 12px Fredoka, "Segoe UI", sans-serif`;
+  const SERIES_FONT = `italic 600 13px Fredoka, "Segoe UI", sans-serif`;
+  // Smart zoom tiers, as multiples of the zoom that fits the whole map (so they land in
+  // the same places on any window size):
+  //   below AREA: town banners only
+  //   AREA..ROAD: + area names along numbered side paths ("East Rocky Mountain")
+  //   ROAD..ALL:  + names of maps on main roads between towns
+  //   ALL and up: + every other map name (still never overlapping)
+  const SMART_ZOOM = { AREA: 1.3, ROAD: 2, ALL: 3 };
+  const LABEL_PAD = 3;          // px kept clear around each smart label
+  const SERIES_FIT = 0.75;      // share of neighbour pairs whose own labels must fit to skip the series label
+  const textWidths = new Map();
+  function textWidth(text, font) {
+    const k = font + "|" + text;
+    if (!textWidths.has(k)) { ctx.font = font; textWidths.set(k, ctx.measureText(text).width); }
+    return textWidths.get(k);
+  }
+
+  function labelPriority(j) {
+    const m = j.m;
+    if (j.focus) return -1;
+    if (j.mobHit) return 0.5;
+    if (m.type === "boss") return 1;
+    const sc = routeScore.get(m.id) || 0;
+    if (sc > 0) return 2 - sc / maxRouteScore; // 1..2, busiest roads first
+    if (m.worldMapDot) return 2.5;
+    if (m.type === "hidden") return 4;
+    if (m.type === "building") return 5;
+    return 3;
+  }
+
+  // Boxes are {cx, cy, hw, hh, ang}: centre, half sizes and rotation (radians).
+  function boxesOverlap(a, b) {
+    if (!a.ang && !b.ang) return Math.abs(a.cx - b.cx) < a.hw + b.hw && Math.abs(a.cy - b.cy) < a.hh + b.hh;
+    for (const ang of [a.ang, a.ang + Math.PI / 2, b.ang, b.ang + Math.PI / 2]) {
+      const ux = Math.cos(ang), uy = Math.sin(ang);
+      const span = (o) => {
+        const c = o.cx * ux + o.cy * uy;
+        const ext = o.hw * Math.abs(Math.cos(o.ang - ang)) + o.hh * Math.abs(Math.sin(o.ang - ang));
+        return [c - ext, c + ext];
+      };
+      const [a0, a1] = span(a), [b0, b1] = span(b);
+      if (a1 <= b0 || b1 <= a0) return false;
+    }
+    return true;
+  }
+
+  function drawLabels(jobs) {
+    const mode = state.labelMode;
+    const placed = mode === "smart" ? [...sectionMarkerBoxes(), ...hudBoxes()] : [];
+    const nodeJobs = jobs.filter((j) => !j.banner);
+    const jobOf = new Map(nodeJobs.map((j) => [j.m, j]));
+    const nodeBoxes = mode === "smart" ? nodeJobs.map((j) => ({ m: j.m, cx: j.x, cy: j.y, hw: j.r + 1, hh: j.r + 1, ang: 0 })) : [];
+    const fits = (b, own) => {
+      const padded = { ...b, hw: b.hw + LABEL_PAD, hh: b.hh + LABEL_PAD };
+      return !placed.some((p) => boxesOverlap(padded, p)) && !nodeBoxes.some((n) => !own.has(n.m) && boxesOverlap(b, n));
+    };
+
+    // Town banners always show and are placed first.
+    for (const j of jobs) {
+      if (!j.banner) continue;
+      const w = textWidth(j.m.name, `700 15px "Alegreya SC", Georgia, serif`) + 34;
+      placed.push({ cx: j.x, cy: j.y, hw: w / 2, hh: 16, ang: 0 });
+      banner(j.m.name, j.x, j.y);
+    }
+
+    const cands = [];
+    const grouped = new Set();
+    const z = mode === "smart" ? cam.s / fitTarget().s : Infinity;
+    const tier = z >= SMART_ZOOM.ALL ? 3 : z >= SMART_ZOOM.ROAD ? 2 : z >= SMART_ZOOM.AREA ? 1 : 0;
+    if (mode === "smart" && tier >= 1) {
+      for (const s of series) {
+        // Once main-road names show, maps on a main road keep their own labels.
+        const run = s.members.filter((m) => jobOf.has(m) && (tier < 2 || !(routeScore.get(m.id) > 0)));
+        if (run.length < 2) continue;
+        if (tier === 3) { // fully zoomed in: split into map names where they fit
+          const inRun = new Set(run);
+          let pairs = 0, ok = 0;
+          for (const m of run) {
+            for (const { map: v } of neighbors.get(m.id)) {
+              if (!inRun.has(v) || v.id < m.id) continue;
+              const a = jobOf.get(m), b = jobOf.get(v);
+              const w = (textWidth(shortName(m.name), LABEL_FONT) + textWidth(shortName(v.name), LABEL_FONT)) / 2 + 8;
+              pairs++;
+              if (Math.abs(a.x - b.x) >= w || Math.abs(a.y - b.y) >= 20) ok++;
+            }
+          }
+          if (pairs && ok / pairs >= SERIES_FIT) continue;
+        }
+        for (const m of run) grouped.add(m);
+        cands.push({ kind: "series", s, run, pri: 2.3, key: s.key });
+      }
+    }
+    for (const j of nodeJobs) {
+      const special = j.focus || j.mobHit;
+      if (!special) {
+        if (mode === "none" || grouped.has(j.m)) continue;
+        if (tier < 2) continue;                                    // towns and areas only
+        if (tier === 2 && !(routeScore.get(j.m.id) > 0)) continue; // main roads only
+      }
+      cands.push({ kind: "map", j, pri: labelPriority(j), key: j.m.id, forced: j.focus || mode === "all" });
+    }
+    cands.sort((a, b) => a.pri - b.pri || (a.key < b.key ? -1 : 1));
+
+    for (const c of cands) {
+      if (c.kind === "series") { placeSeries(c, fits, placed); continue; }
+      const { j } = c;
+      const text = shortName(j.m.name);
+      const w = textWidth(text, LABEL_FONT) + 6, h = j.lvText ? 30 : 16;
+      const own = new Set([j.m]);
+      // Box centres to try: below the node, above, right, left.
+      const spots = [
+        [j.x, j.y + j.r + 3 + h / 2],
+        [j.x, j.y - j.r - 3 - h / 2],
+        [j.x + j.r + 4 + w / 2, j.y],
+        [j.x - j.r - 4 - w / 2, j.y],
+      ];
+      let at = null;
+      for (const [cx, cy] of c.forced ? spots.slice(0, 1) : spots) {
+        const box = { cx, cy, hw: w / 2, hh: h / 2, ang: 0 };
+        if (c.forced || fits(box, own)) { at = box; placed.push(box); break; }
+      }
+      if (!at) continue;
+      const top = at.cy - h / 2;
+      label(text, at.cx, top + 8, 12);
+      if (j.lvText) label(j.lvText, at.cx, top + 22, 11, j.color, "#2b1a0e", 700);
+    }
+
+    // One italic name laid along a numbered side path, e.g. "East Rocky Mountain".
+    function placeSeries(c, fits, placed) {
+      const pts = c.run.map((m) => jobOf.get(m));
+      const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length, cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+      // Main direction of the run; flat text if the run isn't clearly stretched one way.
+      let sxx = 0, syy = 0, sxy = 0;
+      for (const p of pts) { const dx = p.x - cx, dy = p.y - cy; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+      const ang0 = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+      const tr = sxx + syy, det = sxx * syy - sxy * sxy;
+      const l1 = tr / 2 + Math.sqrt(Math.max(0, tr * tr / 4 - det)), l2 = tr / 2 - Math.sqrt(Math.max(0, tr * tr / 4 - det));
+      let ang = l1 > 3 * Math.max(l2, 1) ? ang0 : 0;
+      if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
+      if (Math.abs(ang) > Math.PI / 3) ang = 0; // too steep to read comfortably
+      const w = textWidth(c.s.base, SERIES_FONT) + 8;
+      const box = { cx, cy, hw: w / 2, hh: 9, ang };
+      if (!fits(box, new Set(c.run))) return;
+      placed.push(box);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      ctx.font = SERIES_FONT;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(43,26,14,.85)"; ctx.lineWidth = 4;
+      ctx.strokeText(c.s.base, 0, 0);
+      ctx.fillStyle = "#fff3c4";
+      ctx.fillText(c.s.base, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  function shortName(n) { return n.replace(/^Hidden Street:\s*/, ""); }
+
+  function drawVignette() {
+    setScreenTransform();
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.8);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(10,30,60,.35)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  let needsDraw = true;
+  let anim = null; // camera animation
+
+  function render(now) {
+    if (anim) {
+      const t = clamp((now - anim.t0) / anim.dur, 0, 1);
+      const e = 1 - Math.pow(1 - t, 3);
+      cam.s = anim.from.s + (anim.to.s - anim.from.s) * e;
+      cam.x = anim.from.x + (anim.to.x - anim.from.x) * e;
+      cam.y = anim.from.y + (anim.to.y - anim.from.y) * e;
+      if (t >= 1) anim = null;
+      needsDraw = true;
+    }
+    if (needsDraw || state.selected || state.mobHit) {
+      needsDraw = false;
+      drawTerrain();
+      drawSections();
+      drawCaves();
+      drawEdges();
+      setScreenTransform();
+      const list = maps.filter(isVisible).sort((p, q) => (p.type === "town") - (q.type === "town") || p.y - q.y);
+      const jobs = [];
+      for (const m of list) { const j = drawNode(m, now); if (j) jobs.push(j); }
+      drawLabels(jobs);
+      drawSectionMarkers();
+      drawClouds();
+      drawVignette();
+    }
+    requestAnimationFrame(render);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Camera
+  // ---------------------------------------------------------------------------
+  const MIN_S = 0.1, MAX_S = 4;
+
+  function panelWidth() { return document.body.classList.contains("panel-open") && W > 720 ? document.getElementById("panel").offsetWidth : 0; }
+
+  function fitTarget() {
+    let pts = [];
+    for (const isl of DATA.islands) pts = pts.concat(isl.points);
+    for (const s of sections) { if (!sectionShown(s)) continue; const b = sectionBox(s); pts.push([b.x0, b.y0], [b.x1, b.y1]); }
+    return fitPoints(pts);
+  }
+
+  // Camera that fits `pts` (world [x, y]) beside the HUD and panel, zoomed in no further than maxS.
+  function fitPoints(pts, pad = 40, maxS = MAX_S) {
+    const bb = bbox(pts);
+    const left = W > 720 ? 270 : 0; // keep clear of the HUD
+    const availW = W - left - panelWidth() - pad * 2, availH = H - pad * 2;
+    const s = clamp(Math.min(availW / Math.max(1, bb.x1 - bb.x0), availH / Math.max(1, bb.y1 - bb.y0 + 30)), MIN_S, maxS);
+    return {
+      s,
+      x: left + pad + (availW - (bb.x1 - bb.x0) * s) / 2 - bb.x0 * s,
+      y: pad + (availH - (bb.y1 - bb.y0) * s) / 2 - bb.y0 * s,
+    };
+  }
+
+  function animateTo(to, dur = 450) {
+    anim = { from: { ...cam }, to, t0: performance.now(), dur };
+  }
+
+  function zoomAt(sx, sy, factor) {
+    const s = clamp(cam.s * factor, MIN_S, MAX_S);
+    const [wx, wy] = screenToWorld(sx, sy);
+    cam.s = s;
+    cam.x = sx - wx * s;
+    cam.y = sy - wy * s;
+    needsDraw = true;
+  }
+
+  function flyTo(m) {
+    const s = Math.max(cam.s, 1.25);
+    const cx = (W - panelWidth()) / 2, cy = H / 2;
+    animateTo({ s, x: cx - m.x * s, y: cy - m.y * s });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hit testing & input
+  // ---------------------------------------------------------------------------
+  // `nodesOnly` skips the section entry/portal markers, which stand in for a map inside
+  // the section: dragging one in Edit mode would pull that map out onto the island.
+  function hitNode(sx, sy, nodesOnly = false) {
+    let best = null, bestD = Infinity;
+    for (const m of maps) {
+      if (!isVisible(m)) continue;
+      const [x, y] = worldToScreen(m.x, m.y);
+      const d = Math.hypot(x - sx, y - sy);
+      if (d < nodeRadius(m) + 7 && d < bestD) { best = m; bestD = d; }
+    }
+    return best || (nodesOnly ? null : hitSectionEntry(sx, sy));
+  }
+
+  const pointers = new Map();
+  let drag = null; // { mode: 'pan'|'node'|'pinch', ... }
+
+  let userMovedCam = false;
+  canvas.addEventListener("pointerdown", (ev) => {
+    userMovedCam = true;
+    canvas.setPointerCapture(ev.pointerId);
+    pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    anim = null;
+    if (pointers.size === 2) {
+      const [p, q] = [...pointers.values()];
+      drag = { mode: "pinch", dist: Math.hypot(p.x - q.x, p.y - q.y), moved: true };
+      return;
+    }
+    const hit = hitNode(ev.clientX, ev.clientY, state.edit);
+    if (state.edit && hit) {
+      drag = { mode: "node", node: hit, sx: ev.clientX, sy: ev.clientY, moved: false };
+    } else {
+      drag = { mode: "pan", sx: ev.clientX, sy: ev.clientY, cx: cam.x, cy: cam.y, moved: false };
+      canvas.classList.add("dragging");
+    }
+  });
+
+  canvas.addEventListener("pointermove", (ev) => {
+    const prev = pointers.get(ev.pointerId);
+    if (prev) pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+
+    if (state.edit) {
+      const [wx, wy] = screenToWorld(ev.clientX, ev.clientY);
+      document.getElementById("coords").textContent = `x ${Math.round(wx)}, y ${Math.round(wy)}`;
+    }
+
+    if (drag && drag.mode === "pinch" && pointers.size === 2) {
+      const [p, q] = [...pointers.values()];
+      const dist = Math.hypot(p.x - q.x, p.y - q.y);
+      zoomAt((p.x + q.x) / 2, (p.y + q.y) / 2, dist / drag.dist);
+      drag.dist = dist;
+      return;
+    }
+    if (drag && drag.mode === "pan") {
+      const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
+      if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+      cam.x = drag.cx + dx; cam.y = drag.cy + dy;
+      needsDraw = true;
+      hideTooltip();
+      return;
+    }
+    if (drag && drag.mode === "node") {
+      const [wx, wy] = screenToWorld(ev.clientX, ev.clientY);
+      if (Math.abs(ev.clientX - drag.sx) + Math.abs(ev.clientY - drag.sy) > 3) drag.moved = true;
+      if (drag.moved) { drag.node.x = Math.round(wx); drag.node.y = Math.round(wy); drag.node.pinned = true; needsDraw = true; }
+      return;
+    }
+
+    const hit = hitNode(ev.clientX, ev.clientY);
+    if (hit !== state.hover) { state.hover = hit; needsDraw = true; }
+    canvas.classList.toggle("pointing", !!hit);
+    if (hit) showTooltip(hit, ev.clientX, ev.clientY); else hideTooltip();
+  });
+
+  function endPointer(ev) {
+    pointers.delete(ev.pointerId);
+    canvas.classList.remove("dragging");
+    if (!drag) return;
+    const d = drag;
+    if (d.mode === "pinch") { if (pointers.size === 0) drag = null; return; }
+    drag = null;
+    if (d.moved) {
+      if (d.mode === "node") { select(d.node, false); toast(`Moved ${d.node.name} to ${d.node.x}, ${d.node.y}`); }
+      return;
+    }
+    const hit = hitNode(ev.clientX, ev.clientY);
+    if (hit) select(hit, true);
+    else if (state.edit) {
+      const [wx, wy] = screenToWorld(ev.clientX, ev.clientY);
+      copyText(`"x": ${Math.round(wx)}, "y": ${Math.round(wy)}`, "Coordinates copied");
+    } else select(null);
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+  canvas.addEventListener("pointerleave", () => { if (!drag) { state.hover = null; hideTooltip(); needsDraw = true; } });
+
+  canvas.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    anim = null;
+    userMovedCam = true;
+    const delta = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+    zoomAt(ev.clientX, ev.clientY, Math.exp(-delta * 0.0015));
+  }, { passive: false });
+
+  window.addEventListener("keydown", (ev) => {
+    if (ev.target.matches?.("input")) { if (ev.key === "Escape") ev.target.blur(); return; }
+    // Letters, digits and space start a search in the HUD box (the first key replaces any
+    // old query); while the picker dialog is open they go to its filter instead.
+    if (/^[A-Za-z0-9 ]$/.test(ev.key) && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+      ev.preventDefault();
+      if (!mobDialog.hidden) {
+        mobFilter.focus();
+        mobFilter.value += ev.key;
+        renderMobGrid();
+        return;
+      }
+      search.focus();
+      search.value = ev.key === " " ? "" : ev.key;
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+    if (!mobDialog.hidden) return; // map shortcuts are off while the picker is open
+    if (ev.key === "Escape") {
+      select(null);
+      if (search.value) clearSearch(); else if (picked.size) clearPicked();
+    } else if (ev.key === "+" || ev.key === "=") zoomAt(W / 2, H / 2, 1.25);
+    else if (ev.key === "-" || ev.key === "_") zoomAt(W / 2, H / 2, 0.8);
+    else if (ev.key === "Home") animateTo(fitTarget());
+    else if (ev.key === "`") setEdit(!state.edit);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Tooltip, panel, HUD
+  // ---------------------------------------------------------------------------
+  const tooltip = document.getElementById("tooltip");
+  function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  function showTooltip(m, x, y) {
+    const lr = levelRange(m);
+    const d = mapDiff(m);
+    let html = `<b>${esc(m.name)}</b>`;
+    if (lr) {
+      html += `<div class="tt-lv"><span class="chip" style="background:${DIFF[d].color}"></span>Lv ${lr.min}${lr.max !== lr.min ? "–" + lr.max : ""} · ${DIFF[d].label}</div>`;
+    } else if (m.type === "town") html += `<div>Town</div>`;
+    tooltip.innerHTML = html;
+    tooltip.style.display = "block";
+    const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+    tooltip.style.left = Math.min(x + 14, W - tw - 8) + "px";
+    tooltip.style.top = Math.min(y + 14, H - th - 8) + "px";
+  }
+  function hideTooltip() { tooltip.style.display = "none"; }
+
+  const TYPE_LABEL = { town: "Town", field: "Field", hidden: "Hidden Street", dungeon: "Dungeon", boss: "Boss", safe: "Safe zone", building: "Building" };
+  const panelBody = document.getElementById("panelBody");
+
+  function select(m, fly = true) {
+    state.selected = m;
+    needsDraw = true;
+    document.body.classList.toggle("panel-open", !!m);
+    document.getElementById("panel").setAttribute("aria-hidden", m ? "false" : "true");
+    try { history.replaceState(null, "", m ? `#map=${encodeURIComponent(m.id)}` : location.pathname + location.search); } catch (_) { /* file:// may refuse */ }
+    if (!m) return;
+    renderPanel(m);
+    if (fly) flyTo(m);
+  }
+
+  function renderPanel(m) {
+    const region = DATA.regions[m.region]?.name || m.region;
+    const lr = levelRange(m);
+    const d = mapDiff(m);
+    let h = `<div class="p-badges"><span class="badge ${m.type}">${TYPE_LABEL[m.type] || m.type}</span>`;
+    if (m.layer === "underground") h += `<span class="badge underground">Underground</span>`;
+    h += m.verified
+      ? `<span class="badge verified" title="Checked against meowDB">✓ meowDB</span>`
+      : `<span class="badge draft" title="Written from memory; not checked yet">Unverified</span>`;
+    const idHtml = m.mapId
+      ? ` · <a href="https://meowdb.com/msclassic/maps/${encodeURIComponent(m.mapId)}" target="_blank" rel="noopener">Map ${esc(m.mapId)} ↗</a>`
+      : "";
+    const street = m.street && m.street !== region ? `${esc(m.street)} · ` : "";
+    h += `</div><h2>${esc(m.name)}</h2><div class="p-sub">${street}${esc(region)}${idHtml}</div>`;
+
+    if (lr) {
+      const c = DIFF[d];
+      h += `<div class="p-level" style="background:${c.color}33;border-color:${c.color}">
+        <span class="chip" style="background:${c.color}"></span>
+        <span class="big">Lv ${lr.min}${lr.max !== lr.min ? "–" + lr.max : ""}</span>
+        <span class="verdict">${c.label}<br><span class="muted">at level ${state.level}</span></span></div>`;
+    } else {
+      h += `<p class="muted" style="margin-top:14px">${m.type === "town" ? "Town — no monsters." : "No monsters here."}</p>`;
+    }
+
+    const ml = mobList(m);
+    if (ml.length) {
+      h += `<section><h3>Monsters</h3><ul class="mob-list">`;
+      for (const mob of ml.sort((p, q) => p.level - q.level)) {
+        const md = diffFor(mob.level, state.level);
+        const stats = [mob.hp ? `${mob.hp.toLocaleString()} HP` : "", mob.exp ? `${mob.exp} EXP` : "", mob.count ? `×${mob.count}` : ""]
+          .filter(Boolean).join(" · ");
+        const name = mob.meowdbId
+          ? `<a href="https://meowdb.com/msclassic/monsters/${mob.meowdbId}" target="_blank" rel="noopener">${esc(mob.name)}</a>`
+          : esc(mob.name);
+        h += `<li><span class="chip" style="background:${DIFF[md].color}"></span>
+          <span class="mob-name">${name}${mob.boss ? '<span class="boss-tag">BOSS</span>' : ""}${stats ? `<br><span class="stats">${stats}</span>` : ""}</span>
+          <span class="lv">Lv ${mob.level}</span><span class="why">${DIFF[md].label}</span></li>`;
+      }
+      h += `</ul></section>`;
+    }
+
+    const nb = neighbors.get(m.id) || [];
+    h += `<section><h3>Connected maps (${nb.length})</h3>`;
+    if (nb.length) {
+      h += `<div class="links">`;
+      for (const { map: n, via } of nb) {
+        const nlr = levelRange(n), nd = mapDiff(n);
+        const col = nd ? DIFF[nd].color : n.type === "town" ? "#3aa0ff" : "#a9cbe8";
+        h += `<button class="link-btn" data-goto="${esc(n.id)}"><span class="chip" style="background:${col}"></span>
+          <span>${esc(n.name)}${via ? `<br><span class="via">${esc(via)}</span>` : ""}</span>
+          <span class="lv">${nlr ? `Lv ${nlr.min}${nlr.max !== nlr.min ? "–" + nlr.max : ""}` : TYPE_LABEL[n.type] || ""}</span></button>`;
+      }
+      h += `</div>`;
+    } else h += `<p class="muted">None recorded yet.</p>`;
+    h += `</section>`;
+
+    if (m.exits && m.exits.length) {
+      h += `<section><h3>Leads off this map</h3><div class="links">`;
+      for (const x of m.exits) {
+        h += `<a class="link-btn" href="https://meowdb.com/msclassic/maps/${encodeURIComponent(x.mapId)}" target="_blank" rel="noopener">
+          <span>${esc(x.name)}<br><span class="via">${esc(x.region)}</span></span><span class="lv">meowDB ↗</span></a>`;
+      }
+      h += `</div></section>`;
+    }
+
+    if (m.notes) h += `<section><h3>Notes</h3><div class="p-notes">${esc(m.notes)}</div></section>`;
+    h += `<div class="p-meta">id: ${esc(m.id)} · x ${m.x}, y ${m.y}</div>`;
+    panelBody.innerHTML = h;
+  }
+
+  panelBody.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-goto]");
+    if (b) { const m = byId.get(b.dataset.goto); reveal(m); select(m); }
+  });
+  document.getElementById("panelClose").addEventListener("click", () => select(null));
+
+  // Level controls
+  const lvlNum = document.getElementById("lvlNum"), lvlRange = document.getElementById("lvlRange");
+  function setLevel(v) {
+    state.level = clampInt(v, 1, MAX_LEVEL);
+    lvlNum.value = lvlRange.value = state.level;
+    renderLegend();
+    if (state.selected) renderPanel(state.selected);
+    if (!document.getElementById("mobDialog").hidden) renderMobGrid(); // name colours follow level
+    needsDraw = true;
+    savePrefs();
+  }
+  lvlNum.addEventListener("change", () => setLevel(lvlNum.value));
+  lvlRange.addEventListener("input", () => setLevel(lvlRange.value));
+
+  const showHidden = document.getElementById("showHidden"), labelModeInput = document.getElementById("labelMode");
+  const LABEL_MODES = ["none", "smart", "all"];
+  showHidden.checked = state.showHidden;
+  const syncLabelTicks = () => {
+    document.querySelectorAll("#labelTicks span").forEach((s, i) => s.classList.toggle("on", LABEL_MODES[i] === state.labelMode));
+  };
+  labelModeInput.value = LABEL_MODES.indexOf(state.labelMode);
+  syncLabelTicks();
+  labelModeInput.addEventListener("input", () => {
+    state.labelMode = LABEL_MODES[+labelModeInput.value] || "smart";
+    syncLabelTicks();
+    needsDraw = true; savePrefs();
+  });
+  document.querySelectorAll("#labelTicks span").forEach((s, i) => s.addEventListener("click", () => {
+    labelModeInput.value = i;
+    labelModeInput.dispatchEvent(new Event("input"));
+  }));
+  showHidden.addEventListener("change", () => {
+    state.showHidden = showHidden.checked;
+    if (state.selected && !isVisible(state.selected)) select(null);
+    needsDraw = true; savePrefs();
+  });
+  const showBuildings = document.getElementById("showBuildings");
+  showBuildings.checked = state.showBuildings;
+  showBuildings.addEventListener("change", () => {
+    state.showBuildings = showBuildings.checked;
+    if (state.selected && !isVisible(state.selected)) select(null);
+    needsDraw = true; savePrefs();
+  });
+  const showForgottenHollow = document.getElementById("showForgottenHollow");
+  showForgottenHollow.checked = state.showForgottenHollow;
+  showForgottenHollow.addEventListener("change", () => {
+    state.showForgottenHollow = showForgottenHollow.checked;
+    if (state.selected && !isVisible(state.selected)) select(null);
+    needsDraw = true; savePrefs();
+  });
+
+  // Turn on whatever toggles a map needs to be shown (used when jumping to it).
+  function reveal(m) {
+    if (!m || isVisible(m)) return;
+    if (m.area === "forgotten_hollow") state.showForgottenHollow = showForgottenHollow.checked = true;
+    if (m.type === "hidden") state.showHidden = showHidden.checked = true;
+    if (m.type === "building") state.showBuildings = showBuildings.checked = true;
+    needsDraw = true; savePrefs();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Search and monster picker.
+  // - The HUD search box takes typing (also from anywhere on the map): from
+  //   SEARCH_MIN_CHARS characters, monsters whose name starts with the text get their maps
+  //   ringed when SEARCH_MAX_MOBS or fewer match; Enter jumps to a map or zooms to the rings.
+  // - The icon at the right of the box (mouse only) opens "Find farming spots": monster
+  //   cards (sprite, name coloured by difficulty, level) sorted by level. Pick any number;
+  //   every map with a picked monster gets a ring. Its filter also offers map-name chips.
+  // Rings come from, in order: what's typed in the search box, the picks, the dialog filter.
+  // ---------------------------------------------------------------------------
+  const search = document.getElementById("search");
+  const searchHint = document.getElementById("searchHint"), searchHintText = document.getElementById("searchHintText");
+  const mobDialog = document.getElementById("mobDialog"), mobFilter = document.getElementById("mobFilter");
+  const mobGrid = document.getElementById("mobGrid"), mapChips = document.getElementById("mapChips");
+  const mobSelInfo = document.getElementById("mobSelInfo"), pickerBtn = document.getElementById("pickerBtn");
+  const MOB_IMAGES = window.MOB_IMAGES || {};
+
+  const mapsByMob = new Map(); // monster id -> maps it spawns on
+  for (const m of maps) {
+    for (const x of mobList(m)) {
+      if (!mobs[x.id]) continue;
+      if (!mapsByMob.has(x.id)) mapsByMob.set(x.id, []);
+      if (!mapsByMob.get(x.id).includes(m)) mapsByMob.get(x.id).push(m);
+    }
+  }
+
+  // One entry per monster name (same-name variants, like the two Zombie Mushroom levels,
+  // are merged), only monsters that spawn somewhere, sorted by level then name.
+  const mobGroups = (() => {
+    const byName = new Map();
+    for (const id of mapsByMob.keys()) {
+      const name = mobs[id].name;
+      if (!byName.has(name)) byName.set(name, { name, ids: [] });
+      byName.get(name).ids.push(id);
+    }
+    return [...byName.values()].map((g) => {
+      const levels = [...new Set(g.ids.map((id) => mobs[id].level))].sort((a, b) => a - b);
+      const onMaps = new Set(g.ids.flatMap((id) => mapsByMob.get(id)));
+      return { ...g, levels, level: levels[0], maps: onMaps, img: g.ids.map((id) => MOB_IMAGES[id]).find(Boolean) || null, boss: g.ids.some((id) => mobs[id].boss) };
+    }).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+  })();
+  const groupByName = new Map(mobGroups.map((g) => [g.name, g]));
+
+  const picked = new Set(); // monster names picked in the dialog
+  let previewNames = [];    // dialog-filter matches shown while nothing is picked
+  let typed = { q: "", mobs: [], maps: [] }; // what the HUD search box currently matches
+
+  const SEARCH_MIN_CHARS = 2, SEARCH_MAX_MOBS = 3;
+
+  // Monster names and maps whose names start with q (maps also ignoring a leading "The").
+  function prefixMatches(raw) {
+    const q = raw.trim().toLowerCase();
+    if (q.length < SEARCH_MIN_CHARS) return { q, mobs: [], maps: [] };
+    return { q, mobs: mobGroups.filter((g) => g.name.toLowerCase().startsWith(q)).map((g) => g.name), maps: mapMatches(q) };
+  }
+
+  function filterText() { return mobFilter.value.trim().toLowerCase(); }
+  function mobMatchesFilter(g, q) {
+    if (!q) return true;
+    const n = g.name.toLowerCase();
+    return n.includes(q);
+  }
+  function mapMatches(q) {
+    if (q.length < SEARCH_MIN_CHARS) return [];
+    return maps.filter((x) => { const n = x.name.toLowerCase(); return n.startsWith(q) || n.replace(/^the /, "").startsWith(q); })
+      .sort((a, b) => a.name.length - b.name.length);
+  }
+
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const typedRings = () => (typed.mobs.length && typed.mobs.length <= SEARCH_MAX_MOBS ? typed.mobs : []);
+
+  function updateHighlight() {
+    const fromTyping = typedRings();
+    const names = fromTyping.length ? fromTyping : picked.size ? [...picked] : previewNames;
+    const groups = names.map((n) => groupByName.get(n)).filter(Boolean);
+    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: new Set(groups.flatMap((g) => [...g.maps])) } : null;
+    const n = state.mobHit ? state.mobHit.maps.size : 0;
+    mobSelInfo.textContent = picked.size ? `${picked.size} picked · ${plural(n, "map")}` : "Pick monsters to see where they spawn";
+
+    // Hint under the search box: what the typing matches, else the picks.
+    const parts = [];
+    if (typed.q.length >= SEARCH_MIN_CHARS) {
+      if (fromTyping.length) parts.push(`${groups.map((g) => `${g.name} (Lv ${g.levels.join("/")})`).join(", ")} · ${plural(n, "map")}`);
+      else if (typed.mobs.length) parts.push(`${typed.mobs.length} monsters match, keep typing`);
+      if (typed.maps.length) parts.push(`${plural(typed.maps.length, "map name")} match`);
+    } else if (picked.size) {
+      parts.push(`${groups.map((g) => g.name).join(", ")} · ${plural(n, "map")}`);
+    }
+    searchHintText.textContent = parts.join(" · ");
+    searchHint.hidden = !parts.length;
+    pickerBtn.classList.toggle("on", picked.size > 0);
+    pickerBtn.title = picked.size ? `${plural(picked.size, "monster")} picked. Click to change` : "Pick monsters visually";
+    needsDraw = true;
+  }
+
+  function renderMobGrid() {
+    const q = filterText();
+    const shown = mobGroups.filter((g) => mobMatchesFilter(g, q));
+    mobGrid.innerHTML = shown.length ? shown.map((g) => {
+      const d = diffFor(g.level, state.level);
+      const lv = `Lv ${g.levels.join("/")}${g.boss ? " · Boss" : ""}`;
+      return `<button type="button" class="mob-card${picked.has(g.name) ? " sel" : ""}" data-name="${esc(g.name)}" title="${esc(`${g.name}: ${DIFF[d].label}, on ${g.maps.size} map${g.maps.size === 1 ? "" : "s"}`)}">
+        <div class="sprite">${g.img ? `<img src="${esc(g.img)}" alt="" loading="lazy">` : ""}</div>
+        <div class="mob-name" style="color:${DIFF[d].color}">${esc(g.name)}</div>
+        <div class="mob-lv">${lv} · ${g.maps.size} map${g.maps.size === 1 ? "" : "s"}</div>
+      </button>`;
+    }).join("") : `<div class="mob-empty">No monsters match</div>`;
+
+    const mm = mapMatches(q);
+    mapChips.hidden = !mm.length;
+    mapChips.innerHTML = mm.length ? `<span class="chip-label">Maps:</span>` + mm.slice(0, 8).map((m) => `<button type="button" data-map="${esc(m.id)}">${esc(m.name)}</button>`).join("") : "";
+
+    // Preview on the map while nothing is picked.
+    const pre = q.length >= SEARCH_MIN_CHARS ? mobGroups.filter((g) => g.name.toLowerCase().startsWith(q)) : [];
+    previewNames = pre.length && pre.length <= SEARCH_MAX_MOBS ? pre.map((g) => g.name) : [];
+    updateHighlight();
+  }
+
+  function openMobDialog(initial = "") {
+    mobFilter.value = initial;
+    mobDialog.hidden = false;
+    renderMobGrid();
+    mobFilter.focus();
+    mobFilter.setSelectionRange(mobFilter.value.length, mobFilter.value.length);
+  }
+  function closeMobDialog() {
+    mobDialog.hidden = true;
+    previewNames = [];
+    updateHighlight();
+    if (pickerFromKeyboard) { pickerFromKeyboard = false; pickerBtn.focus(); }
+  }
+  function showPickedOnMap() {
+    const names = picked.size ? [...picked] : previewNames;
+    if (!picked.size) names.forEach((n) => picked.add(n));
+    closeMobDialog();
+    if (!state.mobHit) return;
+    const hits = [...state.mobHit.maps];
+    for (const m of hits) reveal(m);
+    select(null);
+    animateTo(fitPoints(hits.map((m) => [m.x, m.y]), 90, 1.4));
+  }
+  function clearPicked() { picked.clear(); previewNames = []; if (!mobDialog.hidden) renderMobGrid(); else updateHighlight(); }
+  // × under the search box: clear the typing if any, else the picks.
+  function clearSearch() {
+    if (search.value) { search.value = ""; typed = prefixMatches(""); updateHighlight(); }
+    else clearPicked();
+  }
+
+  // Search box: live rings while typing.
+  search.addEventListener("input", () => { typed = prefixMatches(search.value); updateHighlight(); });
+  // Enter just leaves the box; the rings stay. (Tab then Enter opens the picker instead.)
+  search.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); search.blur(); } });
+
+  // Picker icon: next in tab order after the box. Opens with the typed text as its filter;
+  // when opened from the keyboard, focus comes back to the icon on close.
+  let pickerFromKeyboard = false;
+  pickerBtn.addEventListener("click", (ev) => {
+    pickerFromKeyboard = ev.detail === 0; // keyboard "clicks" have no click count
+    openMobDialog(search.value.trim());
+  });
+  pickerBtn.addEventListener("mousedown", (ev) => ev.preventDefault()); // a mouse click doesn't move focus
+  document.getElementById("searchClear").addEventListener("click", clearSearch);
+  document.getElementById("mobDialogClose").addEventListener("click", closeMobDialog);
+  document.getElementById("mobClear").addEventListener("click", clearPicked);
+  document.getElementById("mobShow").addEventListener("click", showPickedOnMap);
+  mobDialog.addEventListener("click", (ev) => { if (ev.target === mobDialog) closeMobDialog(); });
+  mobFilter.addEventListener("input", renderMobGrid);
+  mobGrid.addEventListener("click", (ev) => {
+    const card = ev.target.closest(".mob-card");
+    if (!card) return;
+    const name = card.dataset.name;
+    if (picked.has(name)) picked.delete(name); else picked.add(name);
+    card.classList.toggle("sel", picked.has(name));
+    updateHighlight();
+  });
+  mapChips.addEventListener("click", (ev) => {
+    const m = byId.get(ev.target.closest("button[data-map]")?.dataset.map);
+    if (!m) return;
+    closeMobDialog();
+    reveal(m); select(m);
+  });
+  // Enter: an exact map name jumps there; else show picked (or the previewed) monsters;
+  // else jump to the first matching map.
+  mobFilter.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); closeMobDialog(); return; }
+    if (ev.key !== "Enter") return;
+    const q = filterText();
+    const exact = maps.find((x) => x.name.toLowerCase() === q);
+    if (exact) { closeMobDialog(); reveal(exact); select(exact); return; }
+    if (picked.size || previewNames.length) { showPickedOnMap(); return; }
+    const m = mapMatches(q)[0];
+    if (m) { closeMobDialog(); reveal(m); select(m); }
+    else toast("Pick a monster, or keep typing");
+  });
+  mobDialog.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { ev.stopPropagation(); closeMobDialog(); } });
+  updateHighlight();
+
+  document.getElementById("zoomCtl").addEventListener("click", (ev) => {
+    const z = ev.target.closest("button")?.dataset.zoom;
+    const cx = (W - panelWidth()) / 2;
+    if (z === "in") animateTo(zoomTarget(cx, H / 2, 1.4), 220);
+    else if (z === "out") animateTo(zoomTarget(cx, H / 2, 1 / 1.4), 220);
+    else if (z === "fit") animateTo(fitTarget());
+  });
+  function zoomTarget(sx, sy, f) {
+    const s = clamp(cam.s * f, MIN_S, MAX_S);
+    const [wx, wy] = screenToWorld(sx, sy);
+    return { s, x: sx - wx * s, y: sy - wy * s };
+  }
+
+  function renderLegend() {
+    const ranges = diffRanges(state.level);
+    let h = `<h4>Monster level vs. you (Lv ${state.level})</h4>`;
+    for (const k of ORDER) {
+      h += `<div class="lg-row" title="${esc(DIFF[k].desc)}"><span class="chip" style="background:${DIFF[k].color}"></span>${DIFF[k].label}<span class="range">${ranges[k]}</span></div>`;
+    }
+    h += `<div class="shapes">
+      <span><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#62b7ff" stroke="#0f3a6e" stroke-width="1.5"/></svg>Town</span>
+      <span><svg width="14" height="14"><circle cx="7" cy="7" r="5.5" fill="#ddd" stroke="#2b1a0e" stroke-width="1.5"/></svg>Field</span>
+      <span><svg width="14" height="14"><path d="M7 1 L13 7 L7 13 L1 7Z" fill="#ddd" stroke="#2b1a0e" stroke-width="1.5" stroke-dasharray="2 1.5"/></svg>Hidden</span>
+      <span><svg width="14" height="14"><rect x="1.5" y="1.5" width="11" height="11" rx="3" fill="#ddd" stroke="#2b1a0e" stroke-width="1.5"/></svg>Dungeon</span>
+      <span><svg width="14" height="14"><circle cx="7" cy="7" r="6.5" fill="rgba(155,123,234,.6)"/><circle cx="7" cy="7" r="4" fill="#ddd" stroke="#2b1a0e" stroke-width="1.2"/></svg>Underground</span>
+    </div>`;
+    if (DATA.meta.status === "draft") h += `<div class="note">Draft data: names and levels are approximate.</div>`;
+    else if (DATA.meta.crawledAt) h += `<div class="note">Data from meowDB, ${esc(DATA.meta.crawledAt.slice(0, 10))} · ${maps.length} maps</div>`;
+    document.getElementById("legend").innerHTML = h;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Edit mode
+  // ---------------------------------------------------------------------------
+  const editToggle = document.getElementById("editToggle");
+  function setEdit(on) {
+    state.edit = on;
+    document.body.classList.toggle("editing", on);
+    editToggle.classList.toggle("on", on);
+    editToggle.textContent = on ? "Done editing" : "Edit layout";
+  }
+  editToggle.addEventListener("click", () => setEdit(!state.edit));
+
+  // Export map data only; terrain lives in data/terrain.js.
+  function dataJSON() {
+    const { islands, biomes, rivers, ...rest } = DATA;
+    const meta = { ...rest.meta };
+    delete meta.width; delete meta.height;
+    return JSON.stringify({ ...rest, meta }, null, 1);
+  }
+  document.getElementById("copyData").addEventListener("click", () => copyText(dataJSON(), "Map data copied"));
+  document.getElementById("downloadData").addEventListener("click", () => {
+    const text = "// Victoria Island map data (exported from Edit mode).\nwindow.WORLD_DATA = " + dataJSON() + ";\n";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
+    a.download = "victoria.js";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  function copyText(text, msg) {
+    (navigator.clipboard?.writeText(text) || Promise.reject())
+      .then(() => toast(msg))
+      .catch(() => { console.log(text); toast("Copy failed — printed to console"); });
+  }
+
+  let toastTimer = 0;
+  function toast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Boot
+  // ---------------------------------------------------------------------------
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    if (!userMovedCam && terrain.islands.length) Object.assign(cam, fitTarget());
+    needsDraw = true;
+  }
+  window.addEventListener("resize", resize);
+
+  resize();
+  buildTerrain();
+  setLevel(state.level);
+  Object.assign(cam, fitTarget());
+
+  const hashId = decodeURIComponent((location.hash.match(/map=([^&]+)/) || [])[1] || "");
+  if (hashId && byId.has(hashId)) { reveal(byId.get(hashId)); select(byId.get(hashId)); }
+
+  // Redraw once web fonts arrive so canvas text uses them.
+  document.fonts?.ready.then(() => { needsDraw = true; });
+
+  requestAnimationFrame(render);
+
+  // Handy for debugging in the console.
+  window.worldMap = { DATA, state, cam, routeScore, series, select: (id) => select(byId.get(id)) };
+})();

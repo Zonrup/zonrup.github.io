@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Victoria Island World Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Alegreya+SC:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="map"></canvas>
+
+  <div id="hud">
+    <div class="title-scroll">
+      <span class="roll"></span>
+      <div class="title-body">
+        <div class="title-main">Victoria Island</div>
+        <div class="title-sub">Expanded World Map</div>
+      </div>
+      <span class="roll"></span>
+    </div>
+
+    <div class="card controls">
+      <div class="row">
+        <label for="lvlNum">Your level</label>
+        <input type="number" id="lvlNum" min="1" max="100" value="30">
+      </div>
+      <input type="range" id="lvlRange" min="1" max="100" value="30">
+      <div class="search-row">
+        <input type="search" id="search" placeholder="Find a map or monster…" autocomplete="off">
+        <button type="button" id="pickerBtn" class="picker-btn" aria-label="Pick monsters visually" title="Pick monsters visually"><img src="data/mobs/mob_9.gif" alt=""></button>
+      </div>
+      <div id="searchHint" class="search-hint" hidden><span id="searchHintText"></span><button type="button" id="searchClear" title="Clear (Esc)">×</button></div>
+      <label class="check"><input type="checkbox" id="showHidden" checked> Hidden streets</label>
+      <label class="check"><input type="checkbox" id="showBuildings"> Buildings &amp; shops</label>
+      <label class="check"><input type="checkbox" id="showForgottenHollow"> Forgotten Hollow</label>
+      <div class="label-mode">
+        <label for="labelMode">Labels</label>
+        <input type="range" id="labelMode" min="0" max="2" step="1" value="1">
+        <div class="ticks" id="labelTicks"><span>None</span><span>Smart</span><span>All</span></div>
+      </div>
+      <button id="editToggle" class="btn ghost" title="Drag nodes to lay out the map (`)">Edit layout</button>
+    </div>
+  </div>
+
+  <div id="legend" class="card"></div>
+
+  <div id="zoomCtl" class="card">
+    <button data-zoom="in" title="Zoom in (+)">+</button>
+    <button data-zoom="out" title="Zoom out (−)">−</button>
+    <button data-zoom="fit" title="Fit island (Home)">⤢</button>
+  </div>
+
+  <aside id="panel" aria-hidden="true">
+    <button id="panelClose" class="close" title="Close (Esc)">×</button>
+    <div id="panelBody"></div>
+  </aside>
+
+  <div id="tooltip"></div>
+
+  <div id="editBar" class="card">
+    <strong>Edit mode</strong>
+    <span>Drag nodes to move them. Click empty ground to copy its coordinates.</span>
+    <span id="coords">x –, y –</span>
+    <button id="copyData" class="btn">Copy data JSON</button>
+    <button id="downloadData" class="btn">Download victoria.js</button>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="mobDialog" class="dialog-backdrop" hidden>
+    <div class="dialog card" role="dialog" aria-modal="true" aria-labelledby="mobDialogTitle">
+      <header>
+        <h2 id="mobDialogTitle">Find farming spots</h2>
+        <button type="button" class="close" id="mobDialogClose" title="Close (Esc)">×</button>
+      </header>
+      <input type="search" id="mobFilter" placeholder="Filter monsters, or type a map name…" autocomplete="off">
+      <div id="mapChips" class="map-chips" hidden></div>
+      <div id="mobGrid" class="mob-grid"></div>
+      <footer>
+        <span id="mobSelInfo"></span>
+        <button type="button" class="btn ghost" id="mobClear">Clear</button>
+        <button type="button" class="btn" id="mobShow">Show on map</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="data/terrain.js"></script>
+  <script src="data/victoria.js"></script>
+  <script src="data/mob_images.js"></script>
+  <script src="js/map.js"></script>
+</body>
+</html>
