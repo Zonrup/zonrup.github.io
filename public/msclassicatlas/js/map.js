@@ -934,8 +934,10 @@
     return (m.worldMapDot ? 10.5 : 8.5) * k;
   }
 
-  function label(text, x, y, size, fill = "#fff", stroke = "#2b1a0e", weight = 600) {
-    ctx.font = `${weight} ${size}px Fredoka, "Segoe UI", sans-serif`;
+  // Map text (labels, level lines, area names). Nunito reads better than Fredoka at small sizes.
+  const LABEL_FAMILY = `Nunito, "Segoe UI", system-ui, sans-serif`;
+  function label(text, x, y, size, fill = "#fff", stroke = "#2b1a0e", weight = 800) {
+    ctx.font = `${weight} ${size}px ${LABEL_FAMILY}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
@@ -1109,18 +1111,23 @@
   // Smart order: hovered/selected, search hits, bosses, main roads between towns (by
   // routeScore), numbered side paths named once along their length, then the rest.
   // ---------------------------------------------------------------------------
-  const LABEL_FONT = `600 12px Fredoka, "Segoe UI", sans-serif`;
-  const SERIES_FONT = `italic 600 13px Fredoka, "Segoe UI", sans-serif`;
-  // Smart zoom tiers, as multiples of the zoom that fits the whole map (so they land in
-  // the same places on any window size):
+  const LABEL_SIZE = 14, LV_SIZE = 12, SERIES_SIZE = 16;
+  const LABEL_FONT = `800 ${LABEL_SIZE}px ${LABEL_FAMILY}`;
+  const SERIES_FONT = `italic 800 ${SERIES_SIZE}px ${LABEL_FAMILY}`;
+  // Smart zoom tiers, by camera scale (screen px per world unit). Scale is what decides
+  // how much room labels have between nodes, whatever the window size; a bigger window
+  // just shows more of the map at the same scale. Fitting the whole map is about 0.18
+  // on a laptop-sized window and about 0.4 on a 2560-wide one.
   //   below AREA: town banners only
   //   AREA..ROAD: + area names along numbered side paths ("East Rocky Mountain")
   //   ROAD..ALL:  + names of maps on main roads between towns
   //   ALL and up: + every other map name (still never overlapping)
-  const SMART_ZOOM = { AREA: 1.3, ROAD: 2, ALL: 3 };
+  const SMART_ZOOM = { AREA: 0.2, ROAD: 0.4, ALL: 0.6 };
   const LABEL_PAD = 3;          // px kept clear around each smart label
   const SERIES_FIT = 0.75;      // share of neighbour pairs whose own labels must fit to skip the series label
   const textWidths = new Map();
+  // Web fonts arrive after the first frames: re-measure and redraw once they're in.
+  if (document.fonts) document.fonts.ready.then(() => { textWidths.clear(); needsDraw = true; });
   function textWidth(text, font) {
     const k = font + "|" + text;
     if (!textWidths.has(k)) { ctx.font = font; textWidths.set(k, ctx.measureText(text).width); }
@@ -1177,7 +1184,7 @@
 
     const cands = [];
     const grouped = new Set();
-    const z = mode === "smart" ? cam.s / fitTarget().s : Infinity;
+    const z = mode === "smart" ? cam.s : Infinity;
     const tier = z >= SMART_ZOOM.ALL ? 3 : z >= SMART_ZOOM.ROAD ? 2 : z >= SMART_ZOOM.AREA ? 1 : 0;
     if (mode === "smart" && tier >= 1) {
       for (const s of series) {
@@ -1193,7 +1200,7 @@
               const a = jobOf.get(m), b = jobOf.get(v);
               const w = (textWidth(shortName(m.name), LABEL_FONT) + textWidth(shortName(v.name), LABEL_FONT)) / 2 + 8;
               pairs++;
-              if (Math.abs(a.x - b.x) >= w || Math.abs(a.y - b.y) >= 20) ok++;
+              if (Math.abs(a.x - b.x) >= w || Math.abs(a.y - b.y) >= LABEL_SIZE + 8) ok++;
             }
           }
           if (pairs && ok / pairs >= SERIES_FIT) continue;
@@ -1217,7 +1224,7 @@
       if (c.kind === "series") { placeSeries(c, fits, placed); continue; }
       const { j } = c;
       const text = shortName(j.m.name);
-      const w = textWidth(text, LABEL_FONT) + 6, h = j.lvText ? 30 : 16;
+      const w = textWidth(text, LABEL_FONT) + 6, h = LABEL_SIZE + 4 + (j.lvText ? LV_SIZE + 2 : 0);
       const own = new Set([j.m]);
       // Box centres to try: below the node, above, right, left.
       const spots = [
@@ -1233,8 +1240,8 @@
       }
       if (!at) continue;
       const top = at.cy - h / 2;
-      label(text, at.cx, top + 8, 12);
-      if (j.lvText) label(j.lvText, at.cx, top + 22, 11, j.color, "#2b1a0e", 700);
+      label(text, at.cx, top + LABEL_SIZE / 2 + 2, LABEL_SIZE);
+      if (j.lvText) label(j.lvText, at.cx, top + LABEL_SIZE + 4 + LV_SIZE / 2, LV_SIZE, j.color, "#2b1a0e", 800);
     }
 
     // One italic name laid along a numbered side path, e.g. "East Rocky Mountain".
@@ -1251,7 +1258,7 @@
       if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
       if (Math.abs(ang) > Math.PI / 3) ang = 0; // too steep to read comfortably
       const w = textWidth(c.s.base, SERIES_FONT) + 8;
-      const box = { cx, cy, hw: w / 2, hh: 9, ang };
+      const box = { cx, cy, hw: w / 2, hh: SERIES_SIZE / 2 + 2, ang };
       if (!fits(box, new Set(c.run))) return;
       placed.push(box);
       ctx.save();
@@ -1259,7 +1266,7 @@
       ctx.rotate(ang);
       ctx.font = SERIES_FONT;
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-      ctx.strokeStyle = "rgba(43,26,14,.85)"; ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(43,26,14,.85)"; ctx.lineWidth = 4.5;
       ctx.strokeText(c.s.base, 0, 0);
       ctx.fillStyle = "#fff3c4";
       ctx.fillText(c.s.base, 0, 0);
