@@ -260,6 +260,7 @@
     showForgottenHollow: false,
     edit: false,
     mobHit: null, // { ids, maps: Set } while a monster search is highlighting maps
+    npcHit: null, // { names: Set, maps: Set } while an NPC search is highlighting maps
   };
   const cam = { x: 0, y: 0, s: 1 }; // screen = world * s + (x, y)
   let W = 0, H = 0, dpr = 1;
@@ -1115,6 +1116,17 @@
       ctx.lineWidth = 3;
       ctx.stroke();
     }
+    // Amber ring on every map with the searched NPC (outside the teal one if both).
+    const npcHit = !!state.npcHit && state.npcHit.maps.has(m);
+    if (npcHit) {
+      const pulse = (Math.sin(now / 300 + 1.5) + 1) / 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r + (mobHit ? 15 : 9) + pulse * 3, 0, Math.PI * 2);
+      if (!mobHit) { ctx.fillStyle = "rgba(255,200,80,.28)"; ctx.fill(); }
+      ctx.strokeStyle = "#ffc94d";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
 
     if (m.type === "town") {
       ctx.save();
@@ -1168,7 +1180,7 @@
     const focus = state.hover === m || state.selected === m || state.portalHover === m;
     const lr = farmRange(m);
     const lvText = lr && (cam.s >= 1.1 || focus) ? (lr.min === lr.max ? `Lv ${lr.min}` : `Lv ${lr.min}–${lr.max}`) : null;
-    return { m, x, y, r, color, lvText, focus, mobHit };
+    return { m, x, y, r, color, lvText, focus, mobHit: mobHit || npcHit }; // either search hit gets a label
   }
 
   // ---------------------------------------------------------------------------
@@ -1393,7 +1405,7 @@
       if (t >= 1) anim = null;
       needsDraw = true;
     }
-    if (needsDraw || state.selected || state.mobHit) {
+    if (needsDraw || state.selected || state.mobHit || state.npcHit) {
       needsDraw = false;
       drawTerrain();
       drawSections();
@@ -1719,6 +1731,7 @@
       h += `</div>`;
     } else h += `<p class="muted">None recorded yet.</p>`;
     h += `</section>`;
+    h += npcHtml(m, inSub);
     h += minimapHtml(m);
 
     if (m.exits && m.exits.length) {
@@ -1733,6 +1746,7 @@
     if (m.notes) h += `<section><h3>Notes</h3><div class="p-notes">${esc(m.notes)}</div></section>`;
     h += `<div class="p-meta">id: ${esc(m.id)} · x ${m.x}, y ${m.y}</div>`;
     panelBody.innerHTML = h;
+    paintNpcs();
   }
 
   // meowDB minimap (data/minimap_info.js, from tools/scrape_minimaps.py) with a pin on each
@@ -1763,10 +1777,73 @@
         pins += `<a class="mm-portal off${edge}" style="${pos}" href="https://meowdb.com/msclassic/maps/${encodeURIComponent(to)}" target="_blank" rel="noopener" data-key="${esc(to)}" data-name="${esc(name)} ↗" aria-label="${esc(name)} on meowDB"></a>`;
       }
     }
+    // NPC dots, keyed like the NPC list's rows; put before the portal pins so pins stay on top.
+    info.npcs.forEach(([x, y, name], i) => {
+      const left = pct(x, v.cx, v.w);
+      const edge = left < 34 ? " edge-l" : left > 66 ? " edge-r" : "";
+      pins = `<span class="mm-npc${edge}" style="left:${left}%;top:${pct(y, v.cy, v.h)}%" data-npc="${esc(m.mapId)}:${i}" data-npc-name="${esc(name)}" data-name="${esc(name)}"></span>` + pins;
+    });
     const ar = v.imgW && v.imgH ? ` style="aspect-ratio:${v.imgW}/${v.imgH}"` : "";
     return `<section><h3>Minimap</h3><div class="minimap"${ar}>
       <img src="${esc(v.img)}" alt="Minimap of ${esc(m.name)}" loading="lazy" decoding="async">${pins}</div></section>`;
   }
+
+  // NPCs on this map, plus (for a host) those inside its buildings. Each row is keyed
+  // "<mapId>:<index in that map's npcs>", the same key as its minimap dot; a building's NPC
+  // has no dot on the host's minimap, so it stands for the building's portal pin instead.
+  let npcHover = null;    // NPC key under the mouse (row or dot)
+  let npcBldHover = null; // building map id whose portal pin is under the mouse
+  let npcPicked = null;   // NPC key clicked in the list (stays lit until clicked again)
+  let npcPanelMap = null; // map the NPC list was last drawn for
+  function npcHtml(m, inSub) {
+    if (npcPanelMap !== m) { npcPanelMap = m; npcPicked = null; npcHover = null; }
+    const info = window.MINIMAP_INFO;
+    if (!info) return "";
+    const rows = [];
+    const add = (map, bld) => (info[map.mapId]?.npcs || []).forEach(([, , name], i) => rows.push({ key: `${map.mapId}:${i}`, name, bld }));
+    add(m, null);
+    if (!inSub) for (const b of buildingsOf.get(m) || []) add(b, b);
+    if (!rows.length) return "";
+    let h = `<section><h3>NPCs (${rows.length})</h3><div class="links">`;
+    for (const r of rows) {
+      h += `<button class="link-btn npc-row" data-npc="${esc(r.key)}" data-npc-name="${esc(r.name)}"${r.bld ? ` data-bld="${esc(r.bld.mapId)}"` : ""}>
+        <span class="chip npc-chip"></span><span>${esc(r.name)}${r.bld ? `<br><span class="via">in ${esc(r.bld.name)}</span>` : ""}</span></button>`;
+    }
+    return h + `</div></section>`;
+  }
+
+  // Marks NPC rows, dots and building pins from the hover, the clicked row and the search:
+  // "hl" for hover/click, "found" for an NPC the search box matches. A building NPC marks
+  // its building's pin.
+  function paintNpcs() {
+    const found = state.npcHit ? state.npcHit.names : null;
+    const hlBld = new Set(), foundBld = new Set();
+    for (const row of panelBody.querySelectorAll(".npc-row")) {
+      const k = row.dataset.npc, b = row.dataset.bld;
+      const hl = k === npcHover || k === npcPicked || (!!b && b === npcBldHover);
+      const fd = !!found && found.has(row.dataset.npcName);
+      row.classList.toggle("hl", hl);
+      row.classList.toggle("found", fd);
+      row.classList.toggle("picked", k === npcPicked);
+      if (b && (k === npcHover || k === npcPicked)) hlBld.add(b);
+      if (b && fd) foundBld.add(b);
+    }
+    for (const dot of panelBody.querySelectorAll(".mm-npc")) {
+      dot.classList.toggle("hl", dot.dataset.npc === npcHover || dot.dataset.npc === npcPicked);
+      dot.classList.toggle("found", !!found && found.has(dot.dataset.npcName));
+    }
+    for (const pin of panelBody.querySelectorAll(".mm-portal")) {
+      pin.classList.toggle("npc-hl", hlBld.has(pin.dataset.key));
+      pin.classList.toggle("npc-found", foundBld.has(pin.dataset.key));
+    }
+  }
+  panelBody.addEventListener("mouseover", (ev) => {
+    const n = ev.target.closest("[data-npc]");
+    const pin = ev.target.closest(".mm-portal");
+    const k = n ? n.dataset.npc : null, b = pin ? pin.dataset.key : null;
+    if (k !== npcHover || b !== npcBldHover) { npcHover = k; npcBldHover = b; paintNpcs(); }
+  });
+  panelBody.addEventListener("mouseleave", () => { npcHover = npcBldHover = null; paintNpcs(); });
 
   // Deferred scripts run just before DOMContentLoaded, after a panel opened from the URL.
   if (!window.MINIMAP_INFO) document.addEventListener("DOMContentLoaded", () => { if (state.selected) renderPanel(state.selected); });
@@ -1799,6 +1876,9 @@
   panelBody.addEventListener("focusout", () => lightPins(null));
 
   panelBody.addEventListener("click", (ev) => {
+    // An NPC row or dot toggles a lasting highlight; it doesn't redraw the panel.
+    const npc = ev.target.closest("[data-npc]");
+    if (npc) { npcPicked = npcPicked === npc.dataset.npc ? null : npc.dataset.npc; paintNpcs(); return; }
     lightPins(null); // the panel is about to be redrawn
     if (ev.target.closest("[data-back]")) { openSub(null); return; }
     const bld = ev.target.closest("[data-building]");
@@ -1908,15 +1988,32 @@
 
   const picked = new Set(); // monster names picked in the dialog
   let previewNames = [];    // dialog-filter matches shown while nothing is picked
-  let typed = { q: "", mobs: [], maps: [] }; // what the HUD search box currently matches
+  let typed = { q: "", mobs: [], npcs: [], maps: [] }; // what the HUD search box currently matches
 
-  const SEARCH_MIN_CHARS = 2, SEARCH_MAX_MOBS = 3;
+  const SEARCH_MIN_CHARS = 2, SEARCH_MAX_MOBS = 3; // NPC names follow the same rules
 
-  // Monster names and maps whose names start with q (maps also ignoring a leading "The").
+  // One entry per NPC name, with the maps to ring (an NPC in a building rings its host).
+  // NPCs come from data/minimap_info.js, which loads deferred, so this is built on first use.
+  let npcGroups = null;
+  function getNpcGroups() {
+    if (npcGroups) return npcGroups;
+    if (!window.MINIMAP_INFO) return [];
+    const byName = new Map();
+    for (const m of maps) {
+      for (const [, , name] of window.MINIMAP_INFO[m.mapId]?.npcs || []) {
+        if (!byName.has(name)) byName.set(name, { name, maps: new Set() });
+        byName.get(name).maps.add(hostOf.get(m) || m);
+      }
+    }
+    return (npcGroups = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)));
+  }
+
+  // Monster names, NPC names and maps whose names start with q (maps also ignoring a leading "The").
   function prefixMatches(raw) {
     const q = raw.trim().toLowerCase();
-    if (q.length < SEARCH_MIN_CHARS) return { q, mobs: [], maps: [] };
-    return { q, mobs: mobGroups.filter((g) => g.name.toLowerCase().startsWith(q)).map((g) => g.name), maps: mapMatches(q) };
+    if (q.length < SEARCH_MIN_CHARS) return { q, mobs: [], npcs: [], maps: [] };
+    const starts = (g) => g.name.toLowerCase().startsWith(q);
+    return { q, mobs: mobGroups.filter(starts).map((g) => g.name), npcs: getNpcGroups().filter(starts).map((g) => g.name), maps: mapMatches(q) };
   }
 
   function filterText() { return mobFilter.value.trim().toLowerCase(); }
@@ -1941,6 +2038,12 @@
     // A monster inside a building rings the building's host (buildings aren't drawn).
     state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: new Set(groups.flatMap((g) => [...g.maps].map((m) => hostOf.get(m) || m))) } : null;
     const n = state.mobHit ? state.mobHit.maps.size : 0;
+
+    const npcRings = typed.npcs.length <= SEARCH_MAX_MOBS ? typed.npcs : [];
+    const npcGs = npcRings.map((name) => getNpcGroups().find((g) => g.name === name)).filter(Boolean);
+    state.npcHit = npcGs.length ? { names: new Set(npcRings), maps: new Set(npcGs.flatMap((g) => [...g.maps])) } : null;
+    paintNpcs(); // the open panel marks the found NPCs too
+
     mobSelInfo.textContent = picked.size ? `${picked.size} picked · ${plural(n, "map")}` : "Pick monsters to see where they spawn";
 
     // Hint under the search box: what the typing matches, else the picks.
@@ -1948,6 +2051,8 @@
     if (typed.q.length >= SEARCH_MIN_CHARS) {
       if (fromTyping.length) parts.push(`${groups.map((g) => `${g.name} (Lv ${g.levels.join("/")})`).join(", ")} · ${plural(n, "map")}`);
       else if (typed.mobs.length) parts.push(`${typed.mobs.length} monsters match, keep typing`);
+      if (npcGs.length) parts.push(`NPC ${npcGs.map((g) => g.name).join(", ")} · ${plural(state.npcHit.maps.size, "map")}`);
+      else if (typed.npcs.length) parts.push(`${typed.npcs.length} NPCs match, keep typing`);
       if (typed.maps.length) parts.push(`${plural(typed.maps.length, "map name")} match`);
     } else if (picked.size) {
       parts.push(`${groups.map((g) => g.name).join(", ")} · ${plural(n, "map")}`);

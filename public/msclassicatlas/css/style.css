@@ -547,9 +547,24 @@ body.editing #editBar { display: flex; }
 }
 .mm-portal.to-building { background: radial-gradient(circle at 40% 35%, #fff4d6, #f2b33d 55%, #b9741a); box-shadow: 0 0 0 1.5px rgba(60, 35, 10, .55), 0 0 8px rgba(255, 190, 80, .8); }
 .mm-portal.off { background: radial-gradient(circle at 40% 35%, #eee, #9a9aa6 55%, #5c5c68); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .45); }
-.mm-portal:hover, .mm-portal:focus-visible, .mm-portal.lit { transform: translate(-50%, -75%) scale(1.3); z-index: 1; outline: none; }
-/* Target map's name above a pin while it's hovered or focused. */
-.mm-portal::after {
+.mm-portal:hover, .mm-portal:focus-visible, .mm-portal.lit, .mm-portal.npc-hl, .mm-portal.npc-found { transform: translate(-50%, -75%) scale(1.3); z-index: 1; outline: none; }
+/* NPC dots: small and quiet until hovered, clicked in the list (hl) or found by search. */
+.mm-npc {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -100%);
+  border: 1.5px solid #3a2614;
+  border-radius: 50%;
+  background: #ffe27a;
+  cursor: pointer;
+  transition: width .12s, height .12s, box-shadow .12s;
+}
+.mm-npc:hover, .mm-npc.hl { width: 15px; height: 15px; z-index: 2; box-shadow: 0 0 0 2px #fff, 0 0 10px 2px rgba(255, 220, 90, .95); }
+.mm-npc.found { width: 13px; height: 13px; z-index: 1; background: #ffc94d; box-shadow: 0 0 0 2px #ffc94d, 0 0 10px 3px rgba(255, 190, 60, .9); }
+.mm-portal.npc-found { box-shadow: 0 0 0 3px #ffc94d, 0 0 12px 3px rgba(255, 190, 60, .9); }
+/* Name above a pin or dot while it's hovered, focused or highlighted. */
+.mm-portal::after, .mm-npc::after {
   content: attr(data-name);
   position: absolute;
   bottom: calc(100% + 6px);
@@ -564,6 +579,14 @@ body.editing #editBar { display: flex; }
   pointer-events: none;
   display: none; /* not just invisible: a hidden label would still widen the panel */
 }
-.mm-portal.edge-l::after { left: -6px; transform: none; }
-.mm-portal.edge-r::after { left: auto; right: -6px; transform: none; }
-.mm-portal:hover::after, .mm-portal:focus-visible::after, .mm-portal.lit::after { display: block; }
+.mm-portal.edge-l::after, .mm-npc.edge-l::after { left: -6px; transform: none; }
+.mm-portal.edge-r::after, .mm-npc.edge-r::after { left: auto; right: -6px; transform: none; }
+.mm-portal:hover::after, .mm-portal:focus-visible::after, .mm-portal.lit::after, .mm-portal.npc-hl::after, .mm-portal.npc-found::after,
+.mm-npc:hover::after, .mm-npc.hl::after, .mm-npc.found::after { display: block; }
+
+/* NPC list rows */
+.chip.npc-chip { background: #ffe27a; }
+.npc-row.hl { background: #fff1c9; border-color: var(--ink); }
+.npc-row.picked { box-shadow: inset 3px 0 0 var(--ink); }
+.npc-row.found { background: #fff3c4; border-color: #e0a21b; }
+.npc-row.found .npc-chip { background: #ffc94d; box-shadow: 0 0 0 2px rgba(255, 190, 60, .5); }
