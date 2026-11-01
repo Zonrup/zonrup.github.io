@@ -1685,6 +1685,8 @@
       h += `<p class="muted" style="margin-top:14px">${m.type === "town" ? "Town — no monsters." : "No monsters here."}</p>`;
     }
 
+    h += minimapHtml(m);
+
     // A host lists its buildings; each opens as a sub-pane.
     const blds = !inSub ? buildingsOf.get(m) || [] : [];
     if (blds.length) {
@@ -1732,7 +1734,6 @@
     } else h += `<p class="muted">None recorded yet.</p>`;
     h += `</section>`;
     h += npcHtml(m, inSub);
-    h += minimapHtml(m);
 
     if (m.exits && m.exits.length) {
       h += `<section><h3>Leads off this map</h3><div class="links">`;
@@ -1763,7 +1764,9 @@
     let pins = "";
     for (const [x, y, to, toName] of info.portals) {
       if (!to || to === "999999999" || to === m.mapId) continue;
-      const t = byMapId.get(to);
+      // Some building portals use a different map id than ours (Henesys's Yellow Mushroom
+      // House is 088000000 on meowDB, 010001008 here), so fall back to a building's name.
+      const t = byMapId.get(to) || (buildingsOf.get(m) || []).find((b) => b.name === toName);
       const name = t ? t.name : toName || to;
       const left = pct(x, v.cx, v.w);
       const pos = `left:${left}%;top:${pct(y, v.cy, v.h)}%`;
@@ -1772,7 +1775,7 @@
       const edge = left < 34 ? " edge-l" : left > 66 ? " edge-r" : "";
       if (t) {
         const kind = hostOf.has(t) ? " to-building" : "";
-        pins += `<button class="mm-portal${kind}${edge}" style="${pos}" data-portal="${esc(t.id)}" data-key="${esc(to)}" data-name="${esc(name)}" aria-label="Go to ${esc(name)}"></button>`;
+        pins += `<button class="mm-portal${kind}${edge}" style="${pos}" data-portal="${esc(t.id)}" data-key="${esc(t.mapId)}" data-name="${esc(name)}" aria-label="Go to ${esc(name)}"></button>`;
       } else {
         pins += `<a class="mm-portal off${edge}" style="${pos}" href="https://meowdb.com/msclassic/maps/${encodeURIComponent(to)}" target="_blank" rel="noopener" data-key="${esc(to)}" data-name="${esc(name)} ↗" aria-label="${esc(name)} on meowDB"></a>`;
       }
@@ -1794,9 +1797,10 @@
   let npcHover = null;    // NPC key under the mouse (row or dot)
   let npcBldHover = null; // building map id whose portal pin is under the mouse
   let npcPicked = null;   // NPC key clicked in the list (stays lit until clicked again)
+  let mapPicked = null;   // building / connected map (our id) clicked in the list; one pick at a time
   let npcPanelMap = null; // map the NPC list was last drawn for
   function npcHtml(m, inSub) {
-    if (npcPanelMap !== m) { npcPanelMap = m; npcPicked = null; npcHover = null; }
+    if (npcPanelMap !== m) { npcPanelMap = m; npcPicked = mapPicked = null; npcHover = null; }
     const info = window.MINIMAP_INFO;
     if (!info) return "";
     const rows = [];
@@ -1832,9 +1836,15 @@
       dot.classList.toggle("hl", dot.dataset.npc === npcHover || dot.dataset.npc === npcPicked);
       dot.classList.toggle("found", !!found && found.has(dot.dataset.npcName));
     }
+    // The clicked building / connected-map row and the pins leading there.
+    const pickedKey = mapPicked ? byId.get(mapPicked)?.mapId : null;
+    for (const row of panelBody.querySelectorAll("[data-building], [data-goto]")) {
+      row.classList.toggle("picked", (row.dataset.building || row.dataset.goto) === mapPicked);
+    }
     for (const pin of panelBody.querySelectorAll(".mm-portal")) {
       pin.classList.toggle("npc-hl", hlBld.has(pin.dataset.key));
       pin.classList.toggle("npc-found", foundBld.has(pin.dataset.key));
+      pin.classList.toggle("picked", !!pickedKey && pin.dataset.key === pickedKey);
     }
   }
   panelBody.addEventListener("mouseover", (ev) => {
@@ -1870,21 +1880,59 @@
     const node = t ? hostOf.get(t) || t : null;
     if (node !== state.portalHover) { state.portalHover = node; needsDraw = true; }
   }
-  panelBody.addEventListener("mouseover", (ev) => lightPins(ev.target.closest(".mm-portal")));
+  // A pin lights itself and its twins; a building or connected-map row lights the pins
+  // that lead there (a connected-map row also lights its node on the world map).
+  function lightFrom(el) {
+    const pin = el.closest(".mm-portal");
+    if (pin) { lightPins(pin); return; }
+    lightPins(null);
+    const row = el.closest("[data-building], [data-goto]");
+    const t = row ? byId.get(row.dataset.building || row.dataset.goto) : null;
+    if (!t) return;
+    lightKey(t.mapId);
+    if (row.dataset.goto) { state.portalHover = t; needsDraw = true; }
+  }
+  panelBody.addEventListener("mouseover", (ev) => lightFrom(ev.target));
   panelBody.addEventListener("mouseleave", () => lightPins(null));
-  panelBody.addEventListener("focusin", (ev) => lightPins(ev.target.closest(".mm-portal")));
+  panelBody.addEventListener("focusin", (ev) => lightFrom(ev.target));
   panelBody.addEventListener("focusout", () => lightPins(null));
 
+  function showMinimap() {
+    const mm = panelBody.querySelector(".minimap");
+    (mm?.closest("section") || mm)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  // Clicks in the panel:
+  // - a minimap pin opens its map;
+  // - a list row (NPC, building, connected map) is picked: it and its spot on the minimap
+  //   stay lit and the minimap scrolls into view. Clicking a picked NPC unpicks it; clicking
+  //   a picked building / map opens it. A map with no pin on the minimap opens at once.
   panelBody.addEventListener("click", (ev) => {
-    // An NPC row or dot toggles a lasting highlight; it doesn't redraw the panel.
     const npc = ev.target.closest("[data-npc]");
-    if (npc) { npcPicked = npcPicked === npc.dataset.npc ? null : npc.dataset.npc; paintNpcs(); return; }
+    if (npc) {
+      npcPicked = npcPicked === npc.dataset.npc ? null : npc.dataset.npc;
+      mapPicked = null;
+      paintNpcs();
+      if (npcPicked && npc.classList.contains("npc-row")) showMinimap();
+      return;
+    }
+    const pt = ev.target.closest("[data-portal]");
+    const row = pt ? null : ev.target.closest("[data-building], [data-goto]");
+    if (row) {
+      const id = row.dataset.building || row.dataset.goto, t = byId.get(id);
+      const hasPin = !!t && [...panelBody.querySelectorAll(".mm-portal")].some((p) => p.dataset.key === t.mapId);
+      if (hasPin && mapPicked !== id) {
+        mapPicked = id; npcPicked = null;
+        paintNpcs();
+        showMinimap();
+        return;
+      }
+    }
     lightPins(null); // the panel is about to be redrawn
     if (ev.target.closest("[data-back]")) { openSub(null); return; }
+    if (pt) { goToMap(byId.get(pt.dataset.portal)); return; }
     const bld = ev.target.closest("[data-building]");
     if (bld) { openSub(byId.get(bld.dataset.building)); return; }
-    const pt = ev.target.closest("[data-portal]");
-    if (pt) { goToMap(byId.get(pt.dataset.portal)); return; }
     const b = ev.target.closest("[data-goto]");
     if (b) goToMap(byId.get(b.dataset.goto));
   });
@@ -2119,8 +2167,26 @@
 
   // Search box: live rings while typing.
   search.addEventListener("input", () => { typed = prefixMatches(search.value); updateHighlight(); });
-  // Enter just leaves the box; the rings stay. (Tab then Enter opens the picker instead.)
-  search.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); search.blur(); } });
+  // Enter leaves the box and moves the map: an exact map name opens that map; else it
+  // deselects and zooms to the ringed monster/NPC maps; else it opens the first matching map.
+  // The rings stay. (Tab then Enter opens the picker instead.)
+  search.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter") return;
+    ev.preventDefault();
+    search.blur();
+    typed = prefixMatches(search.value);
+    updateHighlight();
+    const exact = maps.find((x) => x.name.toLowerCase() === typed.q);
+    if (exact) { reveal(exact); select(exact); return; }
+    const hits = new Set([...(state.mobHit?.maps || []), ...(state.npcHit?.maps || [])]);
+    if (hits.size) {
+      for (const m of hits) reveal(m);
+      select(null);
+      animateTo(fitPoints([...hits].map((m) => [m.x, m.y]), 90, 1.4));
+      return;
+    }
+    if (typed.maps[0]) { reveal(typed.maps[0]); select(typed.maps[0]); }
+  });
 
   // Picker icon: next in tab order after the box. Opens with the typed text as its filter;
   // when opened from the keyboard, focus comes back to the icon on close.

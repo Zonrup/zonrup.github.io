@@ -547,7 +547,7 @@ body.editing #editBar { display: flex; }
 }
 .mm-portal.to-building { background: radial-gradient(circle at 40% 35%, #fff4d6, #f2b33d 55%, #b9741a); box-shadow: 0 0 0 1.5px rgba(60, 35, 10, .55), 0 0 8px rgba(255, 190, 80, .8); }
 .mm-portal.off { background: radial-gradient(circle at 40% 35%, #eee, #9a9aa6 55%, #5c5c68); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .45); }
-.mm-portal:hover, .mm-portal:focus-visible, .mm-portal.lit, .mm-portal.npc-hl, .mm-portal.npc-found { transform: translate(-50%, -75%) scale(1.3); z-index: 1; outline: none; }
+.mm-portal:hover, .mm-portal:focus-visible, .mm-portal.lit, .mm-portal.picked, .mm-portal.npc-hl, .mm-portal.npc-found { transform: translate(-50%, -75%) scale(1.3); z-index: 1; outline: none; }
 /* NPC dots: small and quiet until hovered, clicked in the list (hl) or found by search. */
 .mm-npc {
   position: absolute;
@@ -581,12 +581,15 @@ body.editing #editBar { display: flex; }
 }
 .mm-portal.edge-l::after, .mm-npc.edge-l::after { left: -6px; transform: none; }
 .mm-portal.edge-r::after, .mm-npc.edge-r::after { left: auto; right: -6px; transform: none; }
-.mm-portal:hover::after, .mm-portal:focus-visible::after, .mm-portal.lit::after, .mm-portal.npc-hl::after, .mm-portal.npc-found::after,
+.mm-portal:hover::after, .mm-portal:focus-visible::after, .mm-portal.lit::after, .mm-portal.picked::after, .mm-portal.npc-hl::after, .mm-portal.npc-found::after,
 .mm-npc:hover::after, .mm-npc.hl::after, .mm-npc.found::after { display: block; }
 
 /* NPC list rows */
 .chip.npc-chip { background: #ffe27a; }
 .npc-row.hl { background: #fff1c9; border-color: var(--ink); }
-.npc-row.picked { box-shadow: inset 3px 0 0 var(--ink); }
+/* The clicked row in any list (NPCs, buildings, connected maps). */
+.link-btn.picked { background: #fff1c9; border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
+/* Pins into the clicked building/connected-map row keep a glow and their label. */
+.mm-portal.picked { box-shadow: 0 0 0 3px #fff, 0 0 12px 3px rgba(80, 170, 255, .95); }
 .npc-row.found { background: #fff3c4; border-color: #e0a21b; }
 .npc-row.found .npc-chip { background: #ffc94d; box-shadow: 0 0 0 2px rgba(255, 190, 60, .5); }
