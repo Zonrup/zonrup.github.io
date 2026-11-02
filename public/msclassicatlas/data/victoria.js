@@ -613,6 +613,18 @@ window.WORLD_DATA = {
    "avoid": 29,
    "meowdbId": 59
   },
+  "m700006": {
+   "name": "Shade",
+   "level": 48,
+   "hp": 47000,
+   "exp": 488,
+   "def": 30,
+   "mdef": 10,
+   "acc": 138,
+   "avoid": 35,
+   "meowdbId": 700006,
+   "boss": true
+  },
   "m43": {
    "name": "Wraith",
    "level": 48,
@@ -876,8 +888,8 @@ window.WORLD_DATA = {
     "right_around_lith_harbor"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "lith_harbor_armor_shop",
@@ -1625,8 +1637,8 @@ window.WORLD_DATA = {
    "region": "henesys",
    "type": "safe",
    "street": "Victoria Road",
-   "x": 1797,
-   "y": 2095,
+   "x": 1804,
+   "y": 2126,
    "mobs": [],
    "links": [
     "henesys_department_store",
@@ -1711,8 +1723,8 @@ window.WORLD_DATA = {
    "region": "henesys",
    "type": "safe",
    "street": "Victoria Road",
-   "x": 1881,
-   "y": 2178,
+   "x": 1863,
+   "y": 2191,
    "mobs": [],
    "links": [
     "bowman_instructional_school",
@@ -2261,20 +2273,16 @@ window.WORLD_DATA = {
    "name": "Magic Library",
    "mapId": "010002003",
    "region": "ellinia",
-   "type": "building",
+   "type": "safe",
    "street": "Victoria Road",
    "x": 2605,
    "y": 1525,
    "mobs": [],
-   "links": [],
+   "links": [
+    "the_circulation_desk"
+   ],
    "verified": true,
-   "exits": [
-    {
-     "mapId": "010002005",
-     "name": "010002005",
-     "region": "?"
-    }
-   ]
+   "pinned": true
   },
   {
    "id": "marr_s_forest",
@@ -2289,6 +2297,19 @@ window.WORLD_DATA = {
    "links": [],
    "verified": true,
    "pinned": true
+  },
+  {
+   "id": "the_circulation_desk",
+   "name": "The Circulation Desk",
+   "mapId": "010002005",
+   "region": "ellinia",
+   "type": "building",
+   "street": "Hidden Street",
+   "x": 2585,
+   "y": 1485,
+   "mobs": [],
+   "links": [],
+   "verified": true
   },
   {
    "id": "the_field_south_of_ellinia",
@@ -3155,8 +3176,8 @@ window.WORLD_DATA = {
    "region": "kerning_city",
    "type": "safe",
    "street": "Victoria Road",
-   "x": 563,
-   "y": 911,
+   "x": 539,
+   "y": 988,
    "mobs": [],
    "links": [
     "the_murky_swamp_i"
@@ -3252,8 +3273,8 @@ window.WORLD_DATA = {
     "l_forest_i"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "caution_falling_down",
@@ -3337,8 +3358,8 @@ window.WORLD_DATA = {
     "l_forest_ii"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "l_forest_ii",
@@ -3507,8 +3528,8 @@ window.WORLD_DATA = {
     "kerning_city_middle_forest_ii"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "kerning_city_middle_forest_ii",
@@ -3614,7 +3635,7 @@ window.WORLD_DATA = {
    "type": "safe",
    "street": "Victoria Road",
    "x": 495,
-   "y": 1038,
+   "y": 1068,
    "mobs": [],
    "links": [
     "line_1_area_1"
@@ -3854,8 +3875,8 @@ window.WORLD_DATA = {
     "construction_site_north_of_kerning_city"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "construction_site_north_of_kerning_city",
@@ -3897,8 +3918,8 @@ window.WORLD_DATA = {
     "west_domain_of_perion"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "northern_top_of_construction_site",
@@ -3958,8 +3979,8 @@ window.WORLD_DATA = {
     "the_swamp_of_despair_ii"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "the_swamp_of_despair_ii",
@@ -3992,8 +4013,8 @@ window.WORLD_DATA = {
     "the_swamp_of_despair_iii"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "the_swamp_of_despair_iii",
@@ -4087,8 +4108,8 @@ window.WORLD_DATA = {
     "monkey_swamp_i"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "monkey_swamp_i",
@@ -4218,16 +4239,30 @@ window.WORLD_DATA = {
      "count": 14
     }
    ],
+   "links": [
+    "cabin_of_the_forsaken"
+   ],
+   "verified": true,
+   "pinned": true
+  },
+  {
+   "id": "cabin_of_the_forsaken",
+   "name": "Cabin of the Forsaken",
+   "mapId": "010003112",
+   "region": "kerning_city",
+   "type": "hidden",
+   "street": "Hidden Street",
+   "x": 588,
+   "y": 676,
+   "mobs": [
+    {
+     "id": "m700006",
+     "count": 1
+    }
+   ],
    "links": [],
    "verified": true,
-   "pinned": true,
-   "exits": [
-    {
-     "mapId": "010003112",
-     "name": "010003112",
-     "region": "?"
-    }
-   ]
+   "pinned": true
   },
   {
    "id": "perion",
@@ -4248,8 +4283,8 @@ window.WORLD_DATA = {
     "west_street_corner_of_perion"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "perion_weapon_store",
@@ -4321,8 +4356,8 @@ window.WORLD_DATA = {
     "west_rocky_mountain_i"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "west_rocky_mountain_i",
@@ -5114,8 +5149,8 @@ window.WORLD_DATA = {
     "deep_valley_ii"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "dangerous_valley",
@@ -5374,8 +5409,8 @@ window.WORLD_DATA = {
     "perion_dungeon_entrance"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "perion_dungeon_entrance",
@@ -5408,8 +5443,8 @@ window.WORLD_DATA = {
     "deep_forest"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "excavation_site_i",
@@ -5980,8 +6015,8 @@ window.WORLD_DATA = {
    ],
    "verified": true,
    "layer": "underground",
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "damp_forest",
@@ -7718,8 +7753,8 @@ window.WORLD_DATA = {
     "a_look_out_shed_around_the_beach"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "a_look_out_shed_around_the_beach",
@@ -7744,8 +7779,8 @@ window.WORLD_DATA = {
     "lorang_lorang"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "lorang_lorang",
@@ -7771,8 +7806,8 @@ window.WORLD_DATA = {
     "lorang_lorang_lorang"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "lorang_lorang_lorang",
@@ -7821,8 +7856,8 @@ window.WORLD_DATA = {
     "hot_sand"
    ],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "clang_and_lorang",
@@ -7872,8 +7907,8 @@ window.WORLD_DATA = {
    ],
    "links": [],
    "verified": true,
-   "worldMapDot": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   }
  ],
  "sections": [

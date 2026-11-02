@@ -901,6 +901,56 @@
     shape(0, "#3a3348");
   }
 
+  // Towns that span several nodes: a light blue band around all of a town's maps, so they
+  // read as one town. It covers the area between them (their convex hull, with rounded
+  // edges), since a town's maps don't always link to each other (Kerning City's don't).
+  // Hand-picked: only maps that are really part of the town belong here.
+  const TOWN_GROUPS = [
+    { town: "henesys", maps: ["henesys", "henesys_market", "henesys_park"] },
+    { town: "kerning_city", maps: ["kerning_city", "niora_hospital", "subway_ticketing_booth"] },
+  ].map((g) => ({ ...g, members: new Set(g.maps.map((id) => byId.get(id)).filter(Boolean)) }));
+  // Convex hull of [x, y] points (monotone chain), counter-clockwise.
+  function convexHull(pts) {
+    const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    if (p.length < 3) return p;
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const half = (list) => {
+      const out = [];
+      for (const q of list) {
+        while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+        out.push(q);
+      }
+      out.pop();
+      return out;
+    };
+    return [...half(p), ...half([...p].reverse())];
+  }
+  function drawTowns() {
+    setWorldTransform();
+    const R = 46;
+    for (const g of TOWN_GROUPS) {
+      const members = [...g.members].filter(isVisible);
+      if (members.length < 2) continue;
+      const hull = convexHull(members.map((m) => [m.x, m.y]));
+      // The hull's outline drawn R wide with round joins is the hull grown by R on every side.
+      const shape = (extra, color) => {
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.lineWidth = (R + extra) * 2;
+        ctx.beginPath();
+        hull.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+      };
+      // A slightly wider darker blue first, so the fill on top gets an outline.
+      shape(5, "#7fb6e6");
+      shape(0, "#cfe8fb");
+    }
+  }
+
   function drawClouds() {
     setWorldTransform();
     ctx.strokeStyle = "#5a6f93";
@@ -1105,25 +1155,16 @@
     }
 
     // Teal ring on every map with the searched monster.
+    // One pulsing teal ring on every map a search selects (monsters, items or NPCs).
     const mobHit = !!state.mobHit && state.mobHit.maps.has(m);
-    if (mobHit) {
+    const npcHit = !!state.npcHit && state.npcHit.maps.has(m);
+    if (mobHit || npcHit) {
       const pulse = (Math.sin(now / 300) + 1) / 2;
       ctx.beginPath();
       ctx.arc(x, y, r + 9 + pulse * 3, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(120,230,215,.3)";
       ctx.fill();
       ctx.strokeStyle = "#7fe3d6";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-    // Amber ring on every map with the searched NPC (outside the teal one if both).
-    const npcHit = !!state.npcHit && state.npcHit.maps.has(m);
-    if (npcHit) {
-      const pulse = (Math.sin(now / 300 + 1.5) + 1) / 2;
-      ctx.beginPath();
-      ctx.arc(x, y, r + (mobHit ? 15 : 9) + pulse * 3, 0, Math.PI * 2);
-      if (!mobHit) { ctx.fillStyle = "rgba(255,200,80,.28)"; ctx.fill(); }
-      ctx.strokeStyle = "#ffc94d";
       ctx.lineWidth = 3;
       ctx.stroke();
     }
@@ -1410,6 +1451,7 @@
       drawTerrain();
       drawSections();
       drawCaves();
+      drawTowns();
       drawEdges();
       setScreenTransform();
       const list = maps.filter(isVisible).sort((p, q) => (p.type === "town") - (q.type === "town") || p.y - q.y);
@@ -1587,7 +1629,7 @@
       if (!mobDialog.hidden) {
         mobFilter.focus();
         mobFilter.value += ev.key;
-        renderMobGrid();
+        onFilterChange();
         return;
       }
       search.focus();
@@ -1618,6 +1660,7 @@
     if (lr) {
       html += `<div class="tt-lv"><span class="chip" style="background:${DIFF[d].color}"></span>Lv ${lr.min}${lr.max !== lr.min ? "–" + lr.max : ""} · ${DIFF[d].label}</div>`;
     } else if (m.type === "town") html += `<div>Town</div>`;
+    html += selectedHereHtml(m);
     tooltip.innerHTML = html;
     tooltip.style.display = "block";
     const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
@@ -1625,6 +1668,30 @@
     tooltip.style.top = Math.min(y + 14, H - th - 8) + "px";
   }
   function hideTooltip() { tooltip.style.display = "none"; }
+
+  // Light blue tooltip section: which selected monsters, items and NPCs are on map m (or
+  // in its buildings). Each selected item is listed under the monster here that drops it.
+  function selectedHereHtml(m) {
+    const sel = state.sel;
+    if (!sel || (!sel.mobs.size && !sel.items.length && !sel.npcs.size)) return "";
+    const here = [m, ...(buildingsOf.get(m) || [])];
+    const mobNames = [...new Set(here.flatMap((x) => mobList(x).map((mob) => mob.name)))];
+    const rows = [];
+    for (const name of mobNames) {
+      const items = sel.items.filter((it) => it.mobs.has(name)).map((it) => it.name);
+      if (sel.mobs.has(name) || items.length) rows.push({ name, items });
+    }
+    const npcs = here.flatMap((x) => (window.MINIMAP_INFO?.[x.mapId]?.npcs || []).map(([, , name]) => name))
+      .filter((name, i, a) => sel.npcs.has(name) && a.indexOf(name) === i);
+    if (!rows.length && !npcs.length) return "";
+    let h = `<div class="tt-hits">`;
+    for (const r of rows) {
+      h += `<div class="tt-hit">${esc(r.name)}</div>`;
+      if (r.items.length) h += `<ul>${r.items.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`;
+    }
+    for (const name of npcs) h += `<div class="tt-hit">${esc(npcLabel(name))} <span class="tt-kind">NPC</span></div>`;
+    return h + `</div>`;
+  }
 
   const TYPE_LABEL = { town: "Town", field: "Field", hidden: "Hidden Street", dungeon: "Dungeon", boss: "Boss", safe: "Safe zone", building: "Building" };
   const panelBody = document.getElementById("panelBody");
@@ -1709,8 +1776,8 @@
         const name = mob.meowdbId
           ? `<a href="https://meowdb.com/msclassic/monsters/${mob.meowdbId}" target="_blank" rel="noopener">${esc(mob.name)}</a>`
           : esc(mob.name);
-        h += `<li><span class="chip" style="background:${DIFF[md].color}"></span>
-          <span class="mob-name">${name}${mob.boss ? '<span class="boss-tag">BOSS</span>' : ""}${stats ? `<br><span class="stats">${stats}</span>` : ""}</span>
+        h += `<li data-mob-name="${esc(mob.name)}"><span class="chip" style="background:${DIFF[md].color}"></span>
+          <span class="mob-name">${name}${mob.boss ? '<span class="boss-tag">BOSS</span>' : ""}${stats ? `<br><span class="stats">${stats}</span>` : ""}<span class="sel-drops" hidden></span></span>
           <span class="lv">Lv ${mob.level}</span><span class="why">${DIFF[md].label}</span></li>`;
       }
       h += `</ul></section>`;
@@ -1748,6 +1815,21 @@
     h += `<div class="p-meta">id: ${esc(m.id)} · x ${m.x}, y ${m.y}</div>`;
     panelBody.innerHTML = h;
     paintNpcs();
+    paintMobs();
+  }
+
+  // Marks monster rows that the search selects ("found"): typed or picked monsters, and
+  // monsters that drop a typed item, with a "Drops <item>" line under their stats.
+  function paintMobs() {
+    const sel = state.sel;
+    for (const row of panelBody.querySelectorAll("li[data-mob-name]")) {
+      const name = row.dataset.mobName;
+      const items = sel ? sel.items.filter((it) => it.mobs.has(name)).map((it) => it.name) : [];
+      row.classList.toggle("found", !!sel && (sel.mobs.has(name) || items.length > 0));
+      const note = row.querySelector(".sel-drops");
+      note.textContent = items.length ? `Drops ${items.join(", ")}` : "";
+      note.hidden = !items.length;
+    }
   }
 
   // meowDB minimap (data/minimap_info.js, from tools/scrape_minimaps.py) with a pin on each
@@ -1811,7 +1893,7 @@
     let h = `<section><h3>NPCs (${rows.length})</h3><div class="links">`;
     for (const r of rows) {
       h += `<button class="link-btn npc-row" data-npc="${esc(r.key)}" data-npc-name="${esc(r.name)}"${r.bld ? ` data-bld="${esc(r.bld.mapId)}"` : ""}>
-        <span class="chip npc-chip"></span><span>${esc(r.name)}${r.bld ? `<br><span class="via">in ${esc(r.bld.name)}</span>` : ""}</span></button>`;
+        <span class="chip npc-chip"></span><span>${esc(r.name)}${STATIONS[r.name] ? `<br><span class="via">${STATIONS[r.name]} station</span>` : ""}${r.bld ? `<br><span class="via">in ${esc(r.bld.name)}</span>` : ""}</span></button>`;
     }
     return h + `</div></section>`;
   }
@@ -1945,7 +2027,7 @@
     lvlNum.value = lvlRange.value = state.level;
     renderLegend();
     if (state.selected) renderPanel(state.selected);
-    if (!document.getElementById("mobDialog").hidden) renderMobGrid(); // name colours follow level
+    if (!document.getElementById("mobDialog").hidden) renderPicker(); // name colours follow level
     needsDraw = true;
     savePrefs();
   }
@@ -1994,15 +2076,19 @@
   // ---------------------------------------------------------------------------
   // Search and monster picker.
   // - The HUD search box takes typing (also from anywhere on the map): from
-  //   SEARCH_MIN_CHARS characters, monsters whose name starts with the text get their maps
-  //   ringed when SEARCH_MAX_MOBS or fewer match; Enter jumps to a map or zooms to the rings.
-  // - The icon at the right of the box (mouse only) opens "Find farming spots": monster
-  //   cards (sprite, name coloured by difficulty, level) sorted by level. Pick any number;
-  //   every map with a picked monster gets a ring. Its filter also offers map-name chips.
-  // Rings come from, in order: what's typed in the search box, the picks, the dialog filter.
+  //   SEARCH_MIN_CHARS characters, monsters, items and NPCs whose name starts with the text
+  //   get their maps ringed when SEARCH_MAX_MOBS or fewer match; Enter jumps to a map or
+  //   zooms to the rings.
+  // - The icon at the right of the box opens "Find farming spots": monster cards (sprite,
+  //   name coloured by difficulty, level) sorted by level. Pick any number; every map with
+  //   a picked monster gets a ring. Its filter also offers map-name chips.
+  // Rings come from the typing and the picks together (see updateHighlight).
   // ---------------------------------------------------------------------------
   const search = document.getElementById("search");
-  const searchHint = document.getElementById("searchHint"), searchHintText = document.getElementById("searchHintText");
+  const searchHint = document.getElementById("searchHint");
+  const hintTyped = document.getElementById("hintTyped"), hintTypedText = document.getElementById("hintTypedText");
+  const hintPicked = document.getElementById("hintPicked"), hintPickedText = document.getElementById("hintPickedText");
+  const pickedChips = document.getElementById("pickedChips"), pickerTabs = document.getElementById("pickerTabs");
   const mobDialog = document.getElementById("mobDialog"), mobFilter = document.getElementById("mobFilter");
   const mobGrid = document.getElementById("mobGrid"), mapChips = document.getElementById("mapChips");
   const mobSelInfo = document.getElementById("mobSelInfo"), pickerBtn = document.getElementById("pickerBtn");
@@ -2034,9 +2120,55 @@
   })();
   const groupByName = new Map(mobGroups.map((g) => [g.name, g]));
 
-  const picked = new Set(); // monster names picked in the dialog
-  let previewNames = [];    // dialog-filter matches shown while nothing is picked
-  let typed = { q: "", mobs: [], npcs: [], maps: [] }; // what the HUD search box currently matches
+  // Common drops (data/drops.js, from tools/scrape_drops.py): ETC items with a meowDB
+  // community vote score of 3 or more. A monster group's drops merge its variants'.
+  const DROPS = window.WORLD_DROPS || { items: {}, mobs: {} };
+  function dropsOf(ids) {
+    const byName = new Map();
+    for (const id of ids) {
+      for (const [itemId, score, osm] of DROPS.mobs[id] || []) {
+        const it = DROPS.items[itemId];
+        if (!it) continue;
+        const old = byName.get(it.name);
+        if (!old || score > old.score) byName.set(it.name, { ...it, id: itemId, score, osm: osm ?? old?.osm ?? null });
+      }
+    }
+    return [...byName.values()].sort((a, b) => b.score - a.score);
+  }
+  for (const g of mobGroups) g.drops = dropsOf(g.ids);
+
+  // One entry per item name: the monster groups that drop it and the maps they spawn on.
+  const itemGroups = (() => {
+    const byName = new Map();
+    for (const g of mobGroups) {
+      for (const d of g.drops) {
+        if (!byName.has(d.name)) byName.set(d.name, { name: d.name, icon: d.icon, mobs: [] });
+        byName.get(d.name).mobs.push(g.name);
+      }
+    }
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+  })();
+  const itemByName = new Map(itemGroups.map((it) => [it.name, it]));
+
+  // Crafting stations are NPCs on the minimaps; these also match their craft's name
+  // (and "crafting station"), so "smithing" finds the Anvil.
+  const STATIONS = {
+    "Anvil": "Smithing", "Weaponcrafting Station": "Weaponcrafting", "Sewing Machine": "Tailoring",
+    "Woodcrafting Station": "Woodcrafting", "Leatherworking Station": "Leatherworking", "Arcane Station": "Arcforge",
+  };
+  const npcLabel = (name) => (STATIONS[name] ? `${name} (${STATIONS[name]})` : name);
+
+  // Picks in the dialog, one set per tab. Picked NPCs ring their maps; picked items ring
+  // the maps of every monster that drops them.
+  const picked = new Set();      // monster names
+  const pickedNpcs = new Set();  // NPC names
+  const pickedItems = new Set(); // item names
+  const PICK_TABS = [["mobs", "Monsters"], ["npcs", "NPCs"], ["items", "Items"]];
+  const pickSets = { mobs: picked, npcs: pickedNpcs, items: pickedItems };
+  const pickCount = () => picked.size + pickedNpcs.size + pickedItems.size;
+  let pickerTab = "mobs";
+  let previewNames = [];    // dialog-filter monster matches shown while nothing is picked
+  let typed = { q: "", mobs: [], npcs: [], items: [], maps: [] }; // what the HUD search box currently matches
 
   const SEARCH_MIN_CHARS = 2, SEARCH_MAX_MOBS = 3; // NPC names follow the same rules
 
@@ -2049,27 +2181,48 @@
     const byName = new Map();
     for (const m of maps) {
       for (const [, , name] of window.MINIMAP_INFO[m.mapId]?.npcs || []) {
-        if (!byName.has(name)) byName.set(name, { name, maps: new Set() });
+        if (!byName.has(name)) {
+          const craft = STATIONS[name];
+          const keys = [name, ...(craft ? [craft, `${craft} station`, "crafting station"] : [])].map((k) => k.toLowerCase());
+          byName.set(name, { name, keys, station: !!craft, maps: new Set() });
+        }
         byName.get(name).maps.add(hostOf.get(m) || m);
       }
     }
     return (npcGroups = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)));
   }
 
-  // Monster names, NPC names and maps whose names start with q (maps also ignoring a leading "The").
+  // Monster, item and NPC names and maps whose names start with q (maps also ignoring a
+  // leading "The"; crafting stations also by craft name).
   function prefixMatches(raw) {
     const q = raw.trim().toLowerCase();
-    if (q.length < SEARCH_MIN_CHARS) return { q, mobs: [], npcs: [], maps: [] };
+    if (q.length < SEARCH_MIN_CHARS) return { q, mobs: [], npcs: [], items: [], maps: [] };
     const starts = (g) => g.name.toLowerCase().startsWith(q);
-    return { q, mobs: mobGroups.filter(starts).map((g) => g.name), npcs: getNpcGroups().filter(starts).map((g) => g.name), maps: mapMatches(q) };
+    return {
+      q,
+      mobs: mobGroups.filter(starts).map((g) => g.name),
+      npcs: getNpcGroups().filter((g) => g.keys.some((k) => k.startsWith(q))).map((g) => g.name),
+      items: itemGroups.filter(starts).map((it) => it.name),
+      maps: mapMatches(q),
+    };
   }
 
   function filterText() { return mobFilter.value.trim().toLowerCase(); }
   function mobMatchesFilter(g, q) {
     if (!q) return true;
     const n = g.name.toLowerCase();
-    return n.includes(q);
+    return n.includes(q) || g.drops.some((d) => d.name.toLowerCase().includes(q)); // "branch" finds Stumps
   }
+  // NPCs match by name or, for crafting stations, by craft ("smith" finds the Anvil).
+  const npcMatchesFilter = (g, q) => !q || g.keys.some((k) => k.includes(q));
+  const itemMatchesFilter = (it, q) => !q || it.name.toLowerCase().includes(q);
+  // The picker's cards on one tab that match the filter text q.
+  function tabEntries(tab, q) {
+    if (tab === "npcs") return getNpcGroups().filter((g) => npcMatchesFilter(g, q));
+    if (tab === "items") return itemGroups.filter((it) => itemMatchesFilter(it, q));
+    return mobGroups.filter((g) => mobMatchesFilter(g, q));
+  }
+  const npcGroupByName = (name) => getNpcGroups().find((g) => g.name === name);
   function mapMatches(q) {
     if (q.length < SEARCH_MIN_CHARS) return [];
     return maps.filter((x) => { const n = x.name.toLowerCase(); return n.startsWith(q) || n.replace(/^the /, "").startsWith(q); })
@@ -2079,51 +2232,129 @@
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const typedRings = () => (typed.mobs.length && typed.mobs.length <= SEARCH_MAX_MOBS ? typed.mobs : []);
 
+  // Maps that a list of monster groups rings. A monster inside a building rings the
+  // building's host (buildings aren't drawn).
+  const ringMaps = (groups) => new Set(groups.flatMap((g) => [...g.maps].map((m) => hostOf.get(m) || m)));
+
+  // Rings come from the typing and the picks together (plus the dialog filter's preview
+  // while nothing is picked). The box under the search bar lists each in its own row.
   function updateHighlight() {
-    const fromTyping = typedRings();
-    const names = fromTyping.length ? fromTyping : picked.size ? [...picked] : previewNames;
-    const groups = names.map((n) => groupByName.get(n)).filter(Boolean);
-    // A monster inside a building rings the building's host (buildings aren't drawn).
-    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: new Set(groups.flatMap((g) => [...g.maps].map((m) => hostOf.get(m) || m))) } : null;
-    const n = state.mobHit ? state.mobHit.maps.size : 0;
+    // A typed item rings the maps of every monster that drops it.
+    const mobTyped = typedRings();
+    const itemGs = (typed.items.length <= SEARCH_MAX_MOBS ? typed.items : []).map((n) => itemByName.get(n)).filter(Boolean);
+    const fromTyping = [...new Set([...mobTyped, ...itemGs.flatMap((it) => it.mobs)])];
+    // Picks: monsters, plus the monsters that drop picked items (or the dialog preview).
+    const pickedItemGs = [...pickedItems].map((n) => itemByName.get(n)).filter(Boolean);
+    const pickedNpcGs = [...pickedNpcs].map(npcGroupByName).filter(Boolean);
+    const fromPicks = pickCount() ? [...picked, ...pickedItemGs.flatMap((it) => it.mobs)] : previewNames;
+    const groups = [...new Set([...fromTyping, ...fromPicks])].map((n) => groupByName.get(n)).filter(Boolean);
+    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: ringMaps(groups) } : null;
+    const typedMaps = ringMaps(fromTyping.map((n) => groupByName.get(n)).filter(Boolean)).size;
+    const pickedMobGroups = [...new Set([...picked, ...pickedItemGs.flatMap((it) => it.mobs)])].map((n) => groupByName.get(n)).filter(Boolean);
+    const pickedMaps = new Set([...ringMaps(pickedMobGroups), ...pickedNpcGs.flatMap((g) => [...g.maps])]).size;
 
-    const npcRings = typed.npcs.length <= SEARCH_MAX_MOBS ? typed.npcs : [];
-    const npcGs = npcRings.map((name) => getNpcGroups().find((g) => g.name === name)).filter(Boolean);
-    state.npcHit = npcGs.length ? { names: new Set(npcRings), maps: new Set(npcGs.flatMap((g) => [...g.maps])) } : null;
+    // NPCs: typed (crafting stations ring together however many match: "crafting station"
+    // finds all six) and picked.
+    const isStation = (name) => !!STATIONS[name];
+    const npcRings = typed.npcs.length <= SEARCH_MAX_MOBS || typed.npcs.every(isStation) ? typed.npcs : [];
+    const npcGs = npcRings.map(npcGroupByName).filter(Boolean);
+    const allNpcGs = [...new Set([...npcGs, ...pickedNpcGs])];
+    state.npcHit = allNpcGs.length ? { names: new Set(allNpcGs.map((g) => g.name)), maps: new Set(allNpcGs.flatMap((g) => [...g.maps])) } : null;
     paintNpcs(); // the open panel marks the found NPCs too
+    // What's selected, for the map tooltip's "on this map" section.
+    const selItems = [...new Map([...itemGs, ...pickedItemGs].map((it) => [it.name, it])).values()];
+    state.sel = {
+      mobs: new Set([...mobTyped, ...picked]),
+      items: selItems.map((it) => ({ name: it.name, mobs: new Set(it.mobs) })),
+      npcs: new Set(allNpcGs.map((g) => g.name)),
+    };
+    paintMobs(); // and the open panel's monster rows
 
-    mobSelInfo.textContent = picked.size ? `${picked.size} picked · ${plural(n, "map")}` : "Pick monsters to see where they spawn";
+    const n = pickCount();
+    mobSelInfo.textContent = n ? `${n} picked · ${plural(pickedMaps, "map")}` : "Pick monsters, NPCs or items to see where they are";
 
-    // Hint under the search box: what the typing matches, else the picks.
+    // Typed row: what the typing matches.
     const parts = [];
     if (typed.q.length >= SEARCH_MIN_CHARS) {
-      if (fromTyping.length) parts.push(`${groups.map((g) => `${g.name} (Lv ${g.levels.join("/")})`).join(", ")} · ${plural(n, "map")}`);
+      const typedNpcMaps = new Set(npcGs.flatMap((g) => [...g.maps])).size;
+      const hitParts = [];
+      if (mobTyped.length) hitParts.push(mobTyped.map((name) => { const g = groupByName.get(name); return `${g.name} (Lv ${g.levels.join("/")})`; }).join(", "));
       else if (typed.mobs.length) parts.push(`${typed.mobs.length} monsters match, keep typing`);
-      if (npcGs.length) parts.push(`NPC ${npcGs.map((g) => g.name).join(", ")} · ${plural(state.npcHit.maps.size, "map")}`);
+      if (itemGs.length) hitParts.push(itemGs.map((it) => `${it.name} (from ${it.mobs.join(", ")})`).join(", "));
+      else if (typed.items.length) parts.push(`${typed.items.length} items match, keep typing`);
+      if (hitParts.length) parts.unshift(`${hitParts.join(", ")} · ${plural(typedMaps, "map")}`);
+      if (npcGs.length) parts.push(`NPC ${npcGs.map((g) => npcLabel(g.name)).join(", ")} · ${plural(typedNpcMaps, "map")}`);
       else if (typed.npcs.length) parts.push(`${typed.npcs.length} NPCs match, keep typing`);
       if (typed.maps.length) parts.push(`${plural(typed.maps.length, "map name")} match`);
-    } else if (picked.size) {
-      parts.push(`${groups.map((g) => g.name).join(", ")} · ${plural(n, "map")}`);
+      if (!parts.length) parts.push("No matches");
     }
-    searchHintText.textContent = parts.join(" · ");
-    searchHint.hidden = !parts.length;
-    pickerBtn.classList.toggle("on", picked.size > 0);
-    pickerBtn.title = picked.size ? `${plural(picked.size, "monster")} picked. Click to change` : "Pick monsters visually";
+    hintTypedText.textContent = parts.join(" · ");
+    hintTyped.hidden = !parts.length;
+    // Picked row: the picker's selection, every tab.
+    const pickedNames = [...picked, ...pickedNpcs, ...pickedItems].map(npcLabel);
+    hintPickedText.textContent = n ? `${pickedNames.join(", ")} · ${plural(pickedMaps, "map")}` : "";
+    hintPicked.hidden = !n;
+    searchHint.hidden = hintTyped.hidden && hintPicked.hidden;
+
+    renderPickedChips();
+    pickerBtn.classList.toggle("on", n > 0);
+    pickerBtn.title = n ? `${n} picked. Click to change` : "Pick monsters, NPCs or items";
     needsDraw = true;
   }
 
-  function renderMobGrid() {
+  // "Selected" chips at the top of the picker (every tab); × on a chip unpicks it.
+  function renderPickedChips() {
+    const chip = (kind, name, img) => `<button type="button" data-unpick="${kind}" data-name="${esc(name)}" title="Remove ${esc(name)}">${img}<span>${esc(npcLabel(name))}</span><b aria-hidden="true">×</b></button>`;
+    const chips = [
+      ...[...picked].map((name) => { const g = groupByName.get(name); return chip("mobs", name, g && g.img ? `<img src="${esc(g.img)}" alt="">` : ""); }),
+      ...[...pickedNpcs].map((name) => chip("npcs", name, `<span class="chip npc-chip"></span>`)),
+      ...[...pickedItems].map((name) => { const it = itemByName.get(name); return chip("items", name, it && it.icon ? `<img src="${esc(it.icon)}" alt="">` : ""); }),
+    ];
+    pickedChips.hidden = !chips.length;
+    pickedChips.innerHTML = chips.length ? `<span class="chip-label">Selected:</span>` + chips.join("") : "";
+  }
+
+  // One card per entry on the current tab. Monster cards show a sprite, difficulty colour and
+  // level; NPC cards where they are; item cards their icon and which monsters drop them.
+  function cardHtml(tab, e) {
+    const sel = pickSets[tab].has(e.name) ? " sel" : "";
+    const attrs = `type="button" data-kind="${tab}" data-name="${esc(e.name)}"`;
+    if (tab === "npcs") {
+      const where = [...e.maps].map((m) => m.name);
+      const sub = STATIONS[e.name] ? `${STATIONS[e.name]} station · ${plural(where.length, "map")}` : where.slice(0, 2).join(", ") + (where.length > 2 ? ` +${where.length - 2}` : "");
+      return `<button ${attrs} class="mob-card npc-card${sel}" title="${esc(`${e.name}: ${where.join(", ")}`)}">
+        <div class="sprite small"><span class="chip npc-chip"></span></div>
+        <div class="mob-name">${esc(e.name)}</div><div class="mob-lv">${esc(sub)}</div></button>`;
+    }
+    if (tab === "items") {
+      const mapsN = ringMaps(e.mobs.map((n) => groupByName.get(n)).filter(Boolean)).size;
+      return `<button ${attrs} class="mob-card item-card${sel}" title="${esc(`${e.name}: dropped by ${e.mobs.join(", ")}`)}">
+        <div class="sprite small">${e.icon ? `<img src="${esc(e.icon)}" alt="" loading="lazy">` : ""}</div>
+        <div class="mob-name">${esc(e.name)}</div>
+        <div class="mob-lv">${esc(e.mobs.length === 1 ? e.mobs[0] : plural(e.mobs.length, "monster"))} · ${plural(mapsN, "map")}</div></button>`;
+    }
+    const d = diffFor(e.level, state.level);
+    const lv = `Lv ${e.levels.join("/")}${e.boss ? " · Boss" : ""}`;
+    return `<button ${attrs} class="mob-card${sel}" aria-label="${esc(`${e.name}: ${DIFF[d].label}, on ${plural(e.maps.size, "map")}`)}">
+      <div class="sprite">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : ""}</div>
+      <div class="mob-name" style="color:${DIFF[d].color}">${esc(e.name)}</div>
+      <div class="mob-lv">${lv} · ${plural(e.maps.size, "map")}</div></button>`;
+  }
+
+  // Tabs (Monsters, NPCs, Items) with their match counts; a tab with no match for the
+  // filter text is greyed out but can still be opened.
+  function renderPicker() {
     const q = filterText();
-    const shown = mobGroups.filter((g) => mobMatchesFilter(g, q));
-    mobGrid.innerHTML = shown.length ? shown.map((g) => {
-      const d = diffFor(g.level, state.level);
-      const lv = `Lv ${g.levels.join("/")}${g.boss ? " · Boss" : ""}`;
-      return `<button type="button" class="mob-card${picked.has(g.name) ? " sel" : ""}" data-name="${esc(g.name)}" title="${esc(`${g.name}: ${DIFF[d].label}, on ${g.maps.size} map${g.maps.size === 1 ? "" : "s"}`)}">
-        <div class="sprite">${g.img ? `<img src="${esc(g.img)}" alt="" loading="lazy">` : ""}</div>
-        <div class="mob-name" style="color:${DIFF[d].color}">${esc(g.name)}</div>
-        <div class="mob-lv">${lv} · ${g.maps.size} map${g.maps.size === 1 ? "" : "s"}</div>
-      </button>`;
-    }).join("") : `<div class="mob-empty">No monsters match</div>`;
+    pickerTabs.innerHTML = PICK_TABS.map(([t, label]) => {
+      const n = tabEntries(t, q).length, picks = pickSets[t].size;
+      const cls = [t === pickerTab ? "on" : "", q && !n ? "empty" : ""].filter(Boolean).join(" ");
+      return `<button type="button" role="tab" data-tab="${t}" aria-selected="${t === pickerTab}" class="${cls}">${label}<span class="n">${n}</span>${picks ? `<span class="picks" title="${picks} picked">✓${picks}</span>` : ""}</button>`;
+    }).join("");
+    const shown = tabEntries(pickerTab, q);
+    const label = PICK_TABS.find(([t]) => t === pickerTab)[1];
+    mobGrid.className = `mob-grid tab-${pickerTab}`;
+    mobGrid.innerHTML = shown.length ? shown.map((e) => cardHtml(pickerTab, e)).join("")
+      : `<div class="mob-empty">No matching ${label === "NPCs" ? "NPCs" : label.toLowerCase()}</div>`;
 
     const mm = mapMatches(q);
     mapChips.hidden = !mm.length;
@@ -2135,30 +2366,65 @@
     updateHighlight();
   }
 
+  // After the filter text changes: if the open tab has nothing matching but another tab
+  // does, switch to the first such tab (in tab order).
+  function onFilterChange() {
+    const q = filterText();
+    if (q && !tabEntries(pickerTab, q).length) {
+      const other = PICK_TABS.find(([t]) => tabEntries(t, q).length);
+      if (other) pickerTab = other[0];
+    }
+    renderPicker();
+  }
+
   function openMobDialog(initial = "") {
     mobFilter.value = initial;
     mobDialog.hidden = false;
-    renderMobGrid();
+    onFilterChange(); // opens on a tab that matches the typed text
     mobFilter.focus();
     mobFilter.setSelectionRange(mobFilter.value.length, mobFilter.value.length);
   }
+  // Popup listing a monster group's common drops, beside the hovered card or panel row.
+  const dropTip = document.getElementById("dropTip");
+  function showDrops(g, anchor) {
+    const d = DIFF[diffFor(g.level, state.level)];
+    let h = `<div class="dt-head">${esc(g.name)}</div><div class="dt-sub">Lv ${g.levels.join("/")} · ${d.label} · ${plural(g.maps.size, "map")}</div>`;
+    if (g.drops.length) {
+      h += `<ul>${g.drops.map((x) => `<li>${x.icon ? `<img src="${esc(x.icon)}" alt="">` : `<span class="dt-noicon"></span>`}
+        <span class="dt-name">${esc(x.name)}${x.sub ? `<small>${esc(x.sub)}</small>` : ""}</span>
+        ${x.osm != null ? `<span class="dt-rate" title="OSMLib reference rate">${x.osm}%</span>` : ""}</li>`).join("")}</ul>`;
+    } else h += `<div class="dt-none">No common ETC drops recorded</div>`;
+    dropTip.innerHTML = h;
+    dropTip.hidden = false;
+    // Right of the anchor if it fits, else left; kept inside the window.
+    const r = anchor.getBoundingClientRect(), tw = dropTip.offsetWidth, th = dropTip.offsetHeight;
+    const x = r.right + 8 + tw <= innerWidth - 8 ? r.right + 8 : Math.max(8, r.left - 8 - tw);
+    dropTip.style.left = x + "px";
+    dropTip.style.top = Math.max(8, Math.min(r.top, innerHeight - th - 8)) + "px";
+  }
+  function hideDrops() { dropTip.hidden = true; }
+
   function closeMobDialog() {
+    hideDrops();
     mobDialog.hidden = true;
     previewNames = [];
     updateHighlight();
     if (pickerFromKeyboard) { pickerFromKeyboard = false; pickerBtn.focus(); }
   }
   function showPickedOnMap() {
-    const names = picked.size ? [...picked] : previewNames;
-    if (!picked.size) names.forEach((n) => picked.add(n));
+    if (!pickCount()) previewNames.forEach((n) => picked.add(n));
     closeMobDialog();
-    if (!state.mobHit) return;
-    const hits = [...state.mobHit.maps];
+    const hits = [...new Set([...(state.mobHit?.maps || []), ...(state.npcHit?.maps || [])])];
+    if (!hits.length) return;
     for (const m of hits) reveal(m);
     select(null);
     animateTo(fitPoints(hits.map((m) => [m.x, m.y]), 90, 1.4));
   }
-  function clearPicked() { picked.clear(); previewNames = []; if (!mobDialog.hidden) renderMobGrid(); else updateHighlight(); }
+  function clearPicked() {
+    for (const set of Object.values(pickSets)) set.clear();
+    previewNames = [];
+    if (!mobDialog.hidden) renderPicker(); else updateHighlight();
+  }
   // × under the search box: clear the typing if any, else the picks.
   function clearSearch() {
     if (search.value) { search.value = ""; typed = prefixMatches(""); updateHighlight(); }
@@ -2196,20 +2462,47 @@
     openMobDialog(search.value.trim());
   });
   pickerBtn.addEventListener("mousedown", (ev) => ev.preventDefault()); // a mouse click doesn't move focus
-  document.getElementById("searchClear").addEventListener("click", clearSearch);
+  document.getElementById("hintTypedClear").addEventListener("click", () => { search.value = ""; typed = prefixMatches(""); updateHighlight(); });
+  document.getElementById("hintPickedClear").addEventListener("click", clearPicked);
+  pickedChips.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-unpick]");
+    if (!b) return;
+    pickSets[b.dataset.unpick].delete(b.dataset.name);
+    renderPicker(); // unmarks the card and updates the rings
+  });
+  pickerTabs.addEventListener("click", (ev) => {
+    const t = ev.target.closest("button[data-tab]")?.dataset.tab;
+    if (!t || t === pickerTab) return;
+    pickerTab = t;
+    hideDrops();
+    renderPicker();
+    mobGrid.scrollTop = 0;
+  });
   document.getElementById("mobDialogClose").addEventListener("click", closeMobDialog);
   document.getElementById("mobClear").addEventListener("click", clearPicked);
   document.getElementById("mobShow").addEventListener("click", showPickedOnMap);
   mobDialog.addEventListener("click", (ev) => { if (ev.target === mobDialog) closeMobDialog(); });
-  mobFilter.addEventListener("input", renderMobGrid);
+  mobFilter.addEventListener("input", onFilterChange);
   mobGrid.addEventListener("click", (ev) => {
     const card = ev.target.closest(".mob-card");
     if (!card) return;
-    const name = card.dataset.name;
-    if (picked.has(name)) picked.delete(name); else picked.add(name);
-    card.classList.toggle("sel", picked.has(name));
-    updateHighlight();
+    const set = pickSets[card.dataset.kind], name = card.dataset.name;
+    if (set.has(name)) set.delete(name); else set.add(name);
+    renderPicker(); // card mark, tab pick counts and rings
   });
+  mobGrid.addEventListener("mouseover", (ev) => {
+    const card = ev.target.closest(".mob-card[data-kind=mobs]");
+    const g = card && groupByName.get(card.dataset.name);
+    if (g) showDrops(g, card); else hideDrops();
+  });
+  mobGrid.addEventListener("mouseleave", hideDrops);
+  panelBody.addEventListener("mouseover", (ev) => {
+    const row = ev.target.closest("li[data-mob-name]");
+    const g = row && groupByName.get(row.dataset.mobName);
+    if (g) showDrops(g, row); else hideDrops();
+  });
+  panelBody.addEventListener("mouseleave", hideDrops);
+  panelBody.addEventListener("scroll", hideDrops);
   mapChips.addEventListener("click", (ev) => {
     const m = byId.get(ev.target.closest("button[data-map]")?.dataset.map);
     if (!m) return;
@@ -2224,10 +2517,10 @@
     const q = filterText();
     const exact = maps.find((x) => x.name.toLowerCase() === q);
     if (exact) { closeMobDialog(); reveal(exact); select(exact); return; }
-    if (picked.size || previewNames.length) { showPickedOnMap(); return; }
+    if (pickCount() || previewNames.length) { showPickedOnMap(); return; }
     const m = mapMatches(q)[0];
     if (m) { closeMobDialog(); reveal(m); select(m); }
-    else toast("Pick a monster, or keep typing");
+    else toast("Pick something, or keep typing");
   });
   mobDialog.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { ev.stopPropagation(); closeMobDialog(); } });
   updateHighlight();

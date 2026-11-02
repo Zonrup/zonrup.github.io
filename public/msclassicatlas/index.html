@@ -28,10 +28,13 @@
       </div>
       <input type="range" id="lvlRange" min="1" max="100" value="30">
       <div class="search-row">
-        <input type="search" id="search" placeholder="Find an NPC/Monster/Map" autocomplete="off">
-        <button type="button" id="pickerBtn" class="picker-btn" aria-label="Pick monsters visually" title="Pick monsters visually"><img src="data/mobs/mob_9.gif" alt=""></button>
+        <input type="search" id="search" placeholder="Find a monster, item, NPC or map" autocomplete="off">
+        <button type="button" id="pickerBtn" class="picker-btn" aria-label="Pick monsters, NPCs or items" title="Pick monsters, NPCs or items"><img src="data/mobs/mob_9.gif" alt=""></button>
       </div>
-      <div id="searchHint" class="search-hint" hidden><span id="searchHintText"></span><button type="button" id="searchClear" title="Clear (Esc)">×</button></div>
+      <div id="searchHint" class="search-hint" hidden>
+        <div id="hintTyped" class="hint-row" hidden><span class="hint-tag">Typed</span><span id="hintTypedText" class="hint-text"></span><button type="button" id="hintTypedClear" title="Clear typing (Esc)">×</button></div>
+        <div id="hintPicked" class="hint-row" hidden><span class="hint-tag">Picked</span><span id="hintPickedText" class="hint-text"></span><button type="button" id="hintPickedClear" title="Clear picks">×</button></div>
+      </div>
       <label class="check"><input type="checkbox" id="showHidden" checked> Hidden streets</label>
       <label class="check"><input type="checkbox" id="showForgottenHollow"> Forgotten Hollow</label>
       <div class="label-mode">
@@ -57,6 +60,7 @@
   </aside>
 
   <div id="tooltip"></div>
+  <div id="dropTip" hidden></div>
 
   <div id="editBar" class="card">
     <strong>Edit mode</strong>
@@ -74,7 +78,9 @@
         <h2 id="mobDialogTitle">Find farming spots</h2>
         <button type="button" class="close" id="mobDialogClose" title="Close (Esc)">×</button>
       </header>
-      <input type="search" id="mobFilter" placeholder="Filter monsters, or type a map name…" autocomplete="off">
+      <div id="pickedChips" class="map-chips picked-chips" hidden></div>
+      <div id="pickerTabs" class="picker-tabs" role="tablist" aria-label="What to pick"></div>
+      <input type="search" id="mobFilter" placeholder="Filter by name, or type a map name…" autocomplete="off">
       <div id="mapChips" class="map-chips" hidden></div>
       <div id="mobGrid" class="mob-grid"></div>
       <footer>
@@ -88,6 +94,7 @@
   <script src="data/terrain.js"></script>
   <script src="data/victoria.js"></script>
   <script src="data/mob_images.js"></script>
+  <script src="data/drops.js"></script>
   <script src="data/minimap_info.js" defer></script>
   <script src="js/map.js"></script>
 </body>

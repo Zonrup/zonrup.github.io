@@ -158,7 +158,6 @@ html, body {
 .picker-btn.on { background: #d6f7f2; box-shadow: inset 0 0 0 2px #2aa89a; }
 .search-hint {
   margin-top: -4px;
-  padding: 3px 4px 3px 8px;
   border-radius: 6px;
   background: #d6f7f2;
   border: 1px solid #6fd3c6;
@@ -166,12 +165,22 @@ html, body {
   font-weight: 600;
   color: var(--ink);
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
 }
-.search-hint span { flex: 1; }
-.search-hint button { border: 0; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; color: var(--ink-soft); }
-.search-hint[hidden] { display: none; }
+.search-hint[hidden], .hint-row[hidden] { display: none; }
+.hint-row { display: flex; align-items: baseline; gap: 6px; padding: 3px 4px 3px 8px; }
+.hint-row + .hint-row { border-top: 1px solid #6fd3c6; }
+.hint-tag { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #1d7d72; }
+.hint-text { flex: 1; min-width: 0; }
+.hint-row button { flex: none; border: 0; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; color: var(--ink-soft); }
+.hint-row button:hover { color: var(--ink); }
+
+/* "Selected" chips at the top of the picker. */
+.picked-chips { max-height: 72px; overflow-y: auto; }
+.picked-chips button { display: inline-flex; align-items: center; gap: 4px; border-color: #2aa89a; background: #e3f9f5; padding: 1px 6px 1px 4px; }
+.picked-chips button img { height: 18px; max-width: 24px; object-fit: contain; }
+.picked-chips button b { font-size: 14px; line-height: 1; color: var(--ink-soft); margin-left: 2px; }
+.picked-chips button:hover b { color: var(--ink); }
 
 /* ---------- Monster picker dialog ---------- */
 .dialog-backdrop {
@@ -236,6 +245,28 @@ html, body {
   position: relative;
 }
 .mob-card:hover { border-color: var(--ink); }
+/* NPC and item cards: a small icon instead of a sprite, so more fit. */
+.mob-grid.tab-npcs, .mob-grid.tab-items { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.mob-card .sprite.small { height: 32px; align-items: center; }
+.mob-card .sprite.small img { max-height: 32px; }
+.mob-card .sprite.small .npc-chip { width: 16px; height: 16px; }
+.mob-card.npc-card .mob-name, .mob-card.item-card .mob-name { color: var(--ink); text-shadow: none; } /* the outline is for difficulty colours */
+.npc-card .mob-lv, .item-card .mob-lv { text-align: center; }
+
+/* Monsters / NPCs / Items tabs. A tab with nothing matching the filter is greyed out. */
+.picker-tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--edge); }
+.picker-tabs button {
+  font: inherit; font-weight: 600; font-size: 14px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; margin-bottom: -2px;
+  border: 2px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0;
+  background: transparent; color: var(--ink-soft); cursor: pointer;
+}
+.picker-tabs button:hover { color: var(--ink); }
+.picker-tabs button.on { background: #fffaf0; border-color: var(--edge); color: var(--ink); }
+.picker-tabs button.empty { opacity: .45; }
+.picker-tabs .n { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 999px; background: var(--parchment-2); }
+.picker-tabs .picks { font-size: 11px; font-weight: 700; color: #1d7d72; }
 .mob-card.sel { border-color: #2aa89a; background: #e3f9f5; box-shadow: 0 0 0 2px #7fe3d6; }
 .mob-card.sel::after {
   content: "✓"; position: absolute; top: 4px; right: 6px;
@@ -419,6 +450,10 @@ body.panel-open #panel { transform: none; }
 .mob-list .lv { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
 .mob-list .why { font-size: 12px; color: var(--ink-soft); width: 92px; text-align: right; }
 .mob-list .stats { font-size: 12px; color: var(--ink-soft); }
+/* Found by search: the teal of the world map's rings and the search hint. */
+.mob-list li.found { background: #d6f7f2; box-shadow: inset 3px 0 0 #2aa89a; padding-left: 9px; border-radius: 4px; }
+.mob-list .sel-drops { display: block; font-size: 12px; font-weight: 600; color: #1d7d72; }
+.mob-list .sel-drops[hidden] { display: none; }
 .mob-list a, .p-sub a { color: inherit; text-decoration-color: var(--edge); }
 .badge.verified { background: #d6f2c9; border-color: #2f6a27; color: #1f4a1a; }
 .badge.draft { background: transparent; border-style: dashed; color: var(--ink-soft); border-color: var(--ink-soft); }
@@ -482,6 +517,43 @@ body.panel-open #panel { transform: none; }
 #tooltip b { font-weight: 600; }
 #tooltip .tt-lv { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
 #tooltip .chip { width: 10px; height: 10px; border-width: 1.5px; border-color: #fff8e6; }
+/* Selected search entries on the hovered map; same light blue as the search hint. */
+#tooltip .tt-hits {
+  margin: 6px -4px -1px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #d6f7f2;
+  border: 1px solid #6fd3c6;
+  color: var(--ink);
+  font-size: 12px;
+}
+#tooltip .tt-hit { font-weight: 600; }
+#tooltip .tt-hits ul { margin: 0 0 2px; padding-left: 16px; }
+#tooltip .tt-kind { font-size: 10px; font-weight: 700; color: #1d7d72; }
+
+/* Common drops, shown on hovering a monster card (picker) or monster row (panel). */
+#dropTip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 60; /* above the picker dialog */
+  background: rgba(40, 26, 12, .94);
+  color: #fff8e6;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.3;
+  width: 240px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
+}
+#dropTip .dt-head { font-weight: 600; }
+#dropTip .dt-sub { font-size: 11px; opacity: .75; margin-bottom: 6px; }
+#dropTip ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+#dropTip li { display: flex; align-items: center; gap: 6px; }
+#dropTip li img, #dropTip li .dt-noicon { width: 22px; height: 22px; object-fit: contain; flex: none; }
+#dropTip li .dt-name { flex: 1; min-width: 0; }
+#dropTip li .dt-name small { display: block; font-size: 10.5px; opacity: .65; }
+#dropTip li .dt-rate { font-size: 11px; opacity: .8; font-variant-numeric: tabular-nums; }
+#dropTip .dt-none { opacity: .75; font-style: italic; }
 
 /* ---------- Edit bar ---------- */
 #editBar {
@@ -561,8 +633,8 @@ body.editing #editBar { display: flex; }
   transition: width .12s, height .12s, box-shadow .12s;
 }
 .mm-npc:hover, .mm-npc.hl { width: 15px; height: 15px; z-index: 2; box-shadow: 0 0 0 2px #fff, 0 0 10px 2px rgba(255, 220, 90, .95); }
-.mm-npc.found { width: 13px; height: 13px; z-index: 1; background: #ffc94d; box-shadow: 0 0 0 2px #ffc94d, 0 0 10px 3px rgba(255, 190, 60, .9); }
-.mm-portal.npc-found { box-shadow: 0 0 0 3px #ffc94d, 0 0 12px 3px rgba(255, 190, 60, .9); }
+.mm-npc.found { width: 13px; height: 13px; z-index: 1; background: #7fe3d6; box-shadow: 0 0 0 2px #2aa89a, 0 0 10px 3px rgba(120, 230, 215, .9); }
+.mm-portal.npc-found { box-shadow: 0 0 0 3px #7fe3d6, 0 0 12px 3px rgba(120, 230, 215, .9); }
 /* Name above a pin or dot while it's hovered, focused or highlighted. */
 .mm-portal::after, .mm-npc::after {
   content: attr(data-name);
@@ -591,5 +663,6 @@ body.editing #editBar { display: flex; }
 .link-btn.picked { background: #fff1c9; border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
 /* Pins into the clicked building/connected-map row keep a glow and their label. */
 .mm-portal.picked { box-shadow: 0 0 0 3px #fff, 0 0 12px 3px rgba(80, 170, 255, .95); }
-.npc-row.found { background: #fff3c4; border-color: #e0a21b; }
-.npc-row.found .npc-chip { background: #ffc94d; box-shadow: 0 0 0 2px rgba(255, 190, 60, .5); }
+/* Found by search: the same teal as monster rows and the world map's rings. */
+.npc-row.found { background: #d6f7f2; border-color: #2aa89a; }
+.npc-row.found .npc-chip { background: #7fe3d6; box-shadow: 0 0 0 2px rgba(42, 168, 154, .5); }

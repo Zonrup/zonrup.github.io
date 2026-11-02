@@ -70,6 +70,7 @@ window.MOB_IMAGES = {
  "m700002": "data/mobs/mob_700002.gif",
  "m700003": "data/mobs/mob_700003.png",
  "m700004": "data/mobs/mob_700004.gif",
+ "m700006": "data/mobs/mob_700006.png",
  "m700007": "data/mobs/mob_700007.png",
  "m8": "data/mobs/mob_8.gif",
  "m800011": "data/mobs/mob_800011.gif",
