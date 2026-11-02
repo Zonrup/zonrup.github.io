@@ -766,3 +766,5 @@ body.editing #editBar { display: flex; }
 .rank-focus-bar[hidden] { display: none; }
 .rank-focus-bar .btn.small { align-self: center; }
 body.rank-focus #hud .search-row, body.rank-focus #searchHint, body.rank-focus #hud .check, body.rank-focus #editToggle { display: none; }
+.rk-unranked { font-style: italic; }
+.rank-list.rank-none { height: auto; min-height: 90px; display: flex; align-items: center; justify-content: center; padding: 16px; text-align: center; font-size: 13px; font-style: italic; color: var(--ink-soft); }
