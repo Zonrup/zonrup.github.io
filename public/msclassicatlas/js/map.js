@@ -110,14 +110,20 @@
   // and orange mushrooms you will keep running into.
   const HARD_SHARE = 1 / 3;
 
-  // Average and `typical` (see HARD_SHARE) are weighted by spawn count when known.
+  // A monster's level for difficulty: its "effectiveLevel" (set in tools/build_data.py for
+  // monsters that fight above their level, like Iron Hog), else its level. The page still
+  // shows "level" as the monster's level.
+  const effLv = (x) => x.effectiveLevel ?? x.level;
+
+  // Average and `typical` (see HARD_SHARE) are weighted by spawn count when known. min, max
+  // and avg are listed levels (for display); typical uses effective levels (for difficulty).
   function levelRange(m) {
     const list = mobList(m).filter((x) => x.level > 0);
     if (!list.length) return null;
     const lv = list.map((x) => x.level);
     const w = list.map((x) => x.count ?? 1);
     const total = w.reduce((a, b) => a + b, 0);
-    const byLevel = list.map((x, i) => [x.level, w[i]]).sort((a, b) => b[0] - a[0]);
+    const byLevel = list.map((x, i) => [effLv(x), w[i]]).sort((a, b) => b[0] - a[0]);
     let seen = 0, typical = byLevel[byLevel.length - 1][0];
     for (const [l, c] of byLevel) { seen += c; if (seen >= total * HARD_SHARE - 1e-9) { typical = l; break; } }
     return {
@@ -1848,7 +1854,7 @@
     if (ml.length) {
       h += `<section><h3>Monsters</h3><ul class="mob-list">`;
       for (const mob of ml.sort((p, q) => p.level - q.level)) {
-        const md = diffFor(mob.level, state.level);
+        const md = diffFor(effLv(mob), state.level);
         const stats = [mob.hp ? `${mob.hp.toLocaleString()} HP` : "", mob.exp ? `${mob.exp} EXP` : "", mob.count ? `×${mob.count}` : ""]
           .filter(Boolean).join(" · ");
         const name = mob.meowdbId
@@ -1858,7 +1864,7 @@
         h += `<li data-mob-name="${esc(mob.name)}"><span class="chip" style="background:${DIFF[md].color}"></span>
           <span class="mob-sprite">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
           <span class="mob-name">${name}${mob.boss ? '<span class="boss-tag">BOSS</span>' : ""}${stats ? `<br><span class="stats">${stats}</span>` : ""}<span class="sel-drops" hidden></span></span>
-          <span class="lv">Lv ${mob.level}</span><span class="why">${DIFF[md].label}</span></li>`;
+          <span class="lv"${effLv(mob) !== mob.level ? ` title="Fights like Lv ${effLv(mob)}"` : ""}>Lv ${mob.level}</span><span class="why">${DIFF[md].label}</span></li>`;
       }
       h += `</ul></section>`;
     }
@@ -2212,7 +2218,8 @@
     return [...byName.values()].map((g) => {
       const levels = [...new Set(g.ids.map((id) => mobs[id].level))].sort((a, b) => a - b);
       const onMaps = new Set(g.ids.flatMap((id) => mapsByMob.get(id)));
-      return { ...g, levels, level: levels[0], maps: onMaps, img: g.ids.map((id) => MOB_IMAGES[id]).find(Boolean) || null, boss: g.ids.some((id) => mobs[id].boss) };
+      const effLevel = Math.min(...g.ids.map((id) => effLv(mobs[id])));
+      return { ...g, levels, level: levels[0], effLevel, maps: onMaps, img: g.ids.map((id) => MOB_IMAGES[id]).find(Boolean) || null, boss: g.ids.some((id) => mobs[id].boss) };
     }).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
   })();
   const groupByName = new Map(mobGroups.map((g) => [g.name, g]));
@@ -2519,7 +2526,7 @@
         <div class="mob-name">${esc(e.name)}</div>
         <div class="mob-lv">${esc(e.mobs.length === 1 ? e.mobs[0] : plural(e.mobs.length, "monster"))} · ${plural(mapsN, "map")}</div></button>`;
     }
-    const d = diffFor(e.level, state.level);
+    const d = diffFor(e.effLevel, state.level);
     const lv = `Lv ${e.levels.join("/")}${e.boss ? " · Boss" : ""}`;
     return `<button ${attrs} class="mob-card${sel}" aria-label="${esc(`${e.name}: ${DIFF[d].label}, on ${plural(e.maps.size, "map")}`)}">
       <div class="sprite">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : ""}</div>
@@ -2574,7 +2581,7 @@
   // Popup listing a monster group's common drops, beside the hovered card or panel row.
   const dropTip = document.getElementById("dropTip");
   function showDrops(g, anchor) {
-    const d = DIFF[diffFor(g.level, state.level)];
+    const d = DIFF[diffFor(g.effLevel, state.level)];
     let h = `<div class="dt-head">${esc(g.name)}</div><div class="dt-sub">Lv ${g.levels.join("/")} · ${d.label} · ${plural(g.maps.size, "map")}</div>`;
     if (g.drops.length) {
       h += `<ul>${g.drops.map((x) => `<li>${x.icon ? `<img src="${esc(x.icon)}" alt="">` : `<span class="dt-noicon"></span>`}
@@ -2782,7 +2789,7 @@
   }
 
   function rankCardHtml(g) {
-    const r = rankingOf(g), d = DIFF[diffFor(g.level, state.level)];
+    const r = rankingOf(g), d = DIFF[diffFor(g.effLevel, state.level)];
     const items = [...pickedItems].map((n) => itemByName.get(n)).filter((it) => it && it.mobs.includes(g.name));
     const unranked = [...g.maps].filter((m) => !rankable(m)).length;
     let list = "";

@@ -38,6 +38,7 @@ window.WORLD_DATA = {
   "m2": {
    "name": "Snail",
    "level": 1,
+   "effectiveLevel": 1,
    "hp": 45,
    "exp": 2,
    "def": 0,
@@ -48,6 +49,7 @@ window.WORLD_DATA = {
   "m3": {
    "name": "Blue Snail",
    "level": 2,
+   "effectiveLevel": 2,
    "hp": 51,
    "exp": 4,
    "def": 0,
@@ -58,6 +60,7 @@ window.WORLD_DATA = {
   "m4": {
    "name": "Shroom",
    "level": 3,
+   "effectiveLevel": 3,
    "hp": 62,
    "exp": 6,
    "def": 0,
@@ -68,6 +71,7 @@ window.WORLD_DATA = {
   "m5": {
    "name": "Red Snail",
    "level": 4,
+   "effectiveLevel": 4,
    "hp": 68,
    "exp": 8,
    "def": 0,
@@ -78,6 +82,7 @@ window.WORLD_DATA = {
   "m6": {
    "name": "Stump",
    "level": 5,
+   "effectiveLevel": 5,
    "hp": 133,
    "exp": 10,
    "def": 30,
@@ -88,6 +93,7 @@ window.WORLD_DATA = {
   "m7": {
    "name": "Slime",
    "level": 6,
+   "effectiveLevel": 6,
    "hp": 115,
    "exp": 12,
    "def": 10,
@@ -98,6 +104,7 @@ window.WORLD_DATA = {
   "m8": {
    "name": "Pig",
    "level": 7,
+   "effectiveLevel": 7,
    "hp": 128,
    "exp": 13,
    "def": 0,
@@ -108,6 +115,7 @@ window.WORLD_DATA = {
   "m9": {
    "name": "Orange Mushroom",
    "level": 8,
+   "effectiveLevel": 8,
    "hp": 142,
    "exp": 15,
    "def": 0,
@@ -118,6 +126,7 @@ window.WORLD_DATA = {
   "m10": {
    "name": "Ribbon Pig",
    "level": 10,
+   "effectiveLevel": 10,
    "hp": 172,
    "exp": 19,
    "def": 0,
@@ -129,6 +138,7 @@ window.WORLD_DATA = {
   "m11": {
    "name": "Dark Stump",
    "level": 11,
+   "effectiveLevel": 11,
    "hp": 236,
    "exp": 21,
    "def": 30,
@@ -140,6 +150,7 @@ window.WORLD_DATA = {
   "m12": {
    "name": "Octopus",
    "level": 12,
+   "effectiveLevel": 12,
    "hp": 191,
    "exp": 23,
    "def": 0,
@@ -151,6 +162,7 @@ window.WORLD_DATA = {
   "m13": {
    "name": "Green Mushroom",
    "level": 14,
+   "effectiveLevel": 14,
    "hp": 233,
    "exp": 26,
    "def": 0,
@@ -162,6 +174,7 @@ window.WORLD_DATA = {
   "m14": {
    "name": "Bubbling",
    "level": 15,
+   "effectiveLevel": 15,
    "hp": 259,
    "exp": 28,
    "def": 20,
@@ -173,6 +186,7 @@ window.WORLD_DATA = {
   "m15": {
    "name": "Axe Stump",
    "level": 17,
+   "effectiveLevel": 17,
    "hp": 371,
    "exp": 32,
    "def": 30,
@@ -184,6 +198,7 @@ window.WORLD_DATA = {
   "m16": {
    "name": "Blue Mushroom",
    "level": 19,
+   "effectiveLevel": 19,
    "hp": 342,
    "exp": 35,
    "def": 10,
@@ -195,6 +210,7 @@ window.WORLD_DATA = {
   "m39": {
    "name": "Ghost Stump",
    "level": 19,
+   "effectiveLevel": 19,
    "hp": 404,
    "exp": 35,
    "def": 15,
@@ -206,6 +222,7 @@ window.WORLD_DATA = {
   "m700004": {
    "name": "Mano",
    "level": 20,
+   "effectiveLevel": 20,
    "hp": 7420,
    "exp": 148,
    "def": 20,
@@ -218,6 +235,7 @@ window.WORLD_DATA = {
   "m17": {
    "name": "Stirge",
    "level": 20,
+   "effectiveLevel": 20,
    "hp": 296,
    "exp": 37,
    "def": 0,
@@ -229,6 +247,7 @@ window.WORLD_DATA = {
   "m18": {
    "name": "Jr. Necki",
    "level": 21,
+   "effectiveLevel": 21,
    "hp": 272,
    "exp": 39,
    "def": 0,
@@ -240,6 +259,7 @@ window.WORLD_DATA = {
   "m19": {
    "name": "Horny Mushroom",
    "level": 22,
+   "effectiveLevel": 22,
    "hp": 403,
    "exp": 41,
    "def": 10,
@@ -251,6 +271,7 @@ window.WORLD_DATA = {
   "m20": {
    "name": "Dark Axe Stump",
    "level": 23,
+   "effectiveLevel": 23,
    "hp": 547,
    "exp": 43,
    "def": 30,
@@ -262,6 +283,7 @@ window.WORLD_DATA = {
   "m42": {
    "name": "Wooden Mask",
    "level": 23,
+   "effectiveLevel": 23,
    "hp": 462,
    "exp": 43,
    "def": 0,
@@ -273,6 +295,7 @@ window.WORLD_DATA = {
   "m64": {
    "name": "Rocky Mask",
    "level": 24,
+   "effectiveLevel": 24,
    "hp": 479,
    "exp": 45,
    "def": 30,
@@ -284,6 +307,7 @@ window.WORLD_DATA = {
   "m21": {
    "name": "Zombie Mushroom",
    "level": 24,
+   "effectiveLevel": 24,
    "hp": 436,
    "exp": 45,
    "def": 15,
@@ -295,6 +319,7 @@ window.WORLD_DATA = {
   "m22": {
    "name": "Wild Boar",
    "level": 25,
+   "effectiveLevel": 25,
    "hp": 510,
    "exp": 46,
    "def": 15,
@@ -306,6 +331,7 @@ window.WORLD_DATA = {
   "m23": {
    "name": "Evil Eye",
    "level": 27,
+   "effectiveLevel": 27,
    "hp": 606,
    "exp": 50,
    "def": 10,
@@ -317,6 +343,7 @@ window.WORLD_DATA = {
   "m24": {
    "name": "Iron Hog",
    "level": 28,
+   "effectiveLevel": 40,
    "hp": 572,
    "exp": 52,
    "def": 500,
@@ -328,6 +355,7 @@ window.WORLD_DATA = {
   "m26": {
    "name": "Fairy 2",
    "level": 29,
+   "effectiveLevel": 29,
    "hp": 593,
    "exp": 54,
    "def": 0,
@@ -339,6 +367,7 @@ window.WORLD_DATA = {
   "m27": {
    "name": "Fairy 3",
    "level": 29,
+   "effectiveLevel": 29,
    "hp": 593,
    "exp": 54,
    "def": 0,
@@ -350,6 +379,7 @@ window.WORLD_DATA = {
   "m28": {
    "name": "Fairy 4",
    "level": 29,
+   "effectiveLevel": 29,
    "hp": 593,
    "exp": 54,
    "def": 0,
@@ -361,6 +391,7 @@ window.WORLD_DATA = {
   "m800011": {
    "name": "Zombie Mushroom",
    "level": 30,
+   "effectiveLevel": 30,
    "hp": 718,
    "exp": 56,
    "def": 15,
@@ -372,6 +403,7 @@ window.WORLD_DATA = {
   "m29": {
    "name": "Ligator",
    "level": 31,
+   "effectiveLevel": 31,
    "hp": 853,
    "exp": 58,
    "def": 10,
@@ -383,6 +415,7 @@ window.WORLD_DATA = {
   "m30": {
    "name": "Fire Boar",
    "level": 32,
+   "effectiveLevel": 32,
    "hp": 842,
    "exp": 60,
    "def": 10,
@@ -394,6 +427,7 @@ window.WORLD_DATA = {
   "m31": {
    "name": "Curse Eye",
    "level": 33,
+   "effectiveLevel": 33,
    "hp": 1001,
    "exp": 63,
    "def": 30,
@@ -405,6 +439,7 @@ window.WORLD_DATA = {
   "m32": {
    "name": "Jr. Wraith",
    "level": 34,
+   "effectiveLevel": 34,
    "hp": 982,
    "exp": 66,
    "def": 30,
@@ -416,6 +451,7 @@ window.WORLD_DATA = {
   "m33": {
    "name": "Jr. Boogie 1",
    "level": 35,
+   "effectiveLevel": 35,
    "hp": 1395,
    "exp": 69,
    "def": 50,
@@ -427,6 +463,7 @@ window.WORLD_DATA = {
   "m34": {
    "name": "Jr. Boogie 2",
    "level": 35,
+   "effectiveLevel": 35,
    "hp": 1395,
    "exp": 69,
    "def": 50,
@@ -438,6 +475,7 @@ window.WORLD_DATA = {
   "m700007": {
    "name": "Stumpy",
    "level": 35,
+   "effectiveLevel": 35,
    "hp": 19220,
    "exp": 276,
    "def": 20,
@@ -450,6 +488,7 @@ window.WORLD_DATA = {
   "m35": {
    "name": "Lupin",
    "level": 37,
+   "effectiveLevel": 37,
    "hp": 1336,
    "exp": 75,
    "def": 0,
@@ -461,6 +500,7 @@ window.WORLD_DATA = {
   "m36": {
    "name": "Lorang",
    "level": 38,
+   "effectiveLevel": 38,
    "hp": 1714,
    "exp": 78,
    "def": 0,
@@ -472,6 +512,7 @@ window.WORLD_DATA = {
   "m54": {
    "name": "Glowshroom",
    "level": 39,
+   "effectiveLevel": 39,
    "hp": 1377,
    "exp": 82,
    "def": 10,
@@ -483,6 +524,7 @@ window.WORLD_DATA = {
   "m37": {
    "name": "Cold Eye",
    "level": 40,
+   "effectiveLevel": 40,
    "hp": 1894,
    "exp": 85,
    "def": 0,
@@ -494,6 +536,7 @@ window.WORLD_DATA = {
   "m700000": {
    "name": "Mushmom",
    "level": 40,
+   "effectiveLevel": 40,
    "hp": 34440,
    "exp": 340,
    "def": 15,
@@ -506,6 +549,7 @@ window.WORLD_DATA = {
   "m55": {
    "name": "Raffle",
    "level": 40,
+   "effectiveLevel": 40,
    "hp": 1722,
    "exp": 85,
    "def": 10,
@@ -517,6 +561,7 @@ window.WORLD_DATA = {
   "m38": {
    "name": "Zombie Lupin",
    "level": 41,
+   "effectiveLevel": 41,
    "hp": 1774,
    "exp": 89,
    "def": 0,
@@ -528,6 +573,7 @@ window.WORLD_DATA = {
   "m56": {
    "name": "Golden Stirge",
    "level": 42,
+   "effectiveLevel": 42,
    "hp": 1278,
    "exp": 93,
    "def": 0,
@@ -539,6 +585,7 @@ window.WORLD_DATA = {
   "m57": {
    "name": "Aqumander",
    "level": 43,
+   "effectiveLevel": 43,
    "hp": 2069,
    "exp": 98,
    "def": 0,
@@ -550,6 +597,7 @@ window.WORLD_DATA = {
   "m65": {
    "name": "Skeledog",
    "level": 44,
+   "effectiveLevel": 44,
    "hp": 2134,
    "exp": 102,
    "def": 15,
@@ -561,6 +609,7 @@ window.WORLD_DATA = {
   "m40": {
    "name": "Copper Drake",
    "level": 45,
+   "effectiveLevel": 45,
    "hp": 2379,
    "exp": 107,
    "def": 15,
@@ -572,6 +621,7 @@ window.WORLD_DATA = {
   "m58": {
    "name": "Echopus",
    "level": 45,
+   "effectiveLevel": 45,
    "hp": 2163,
    "exp": 107,
    "def": 10,
@@ -583,6 +633,7 @@ window.WORLD_DATA = {
   "m41": {
    "name": "Tortie",
    "level": 46,
+   "effectiveLevel": 46,
    "hp": 2226,
    "exp": 111,
    "def": 30,
@@ -594,6 +645,7 @@ window.WORLD_DATA = {
   "m66": {
    "name": "Mummydog",
    "level": 47,
+   "effectiveLevel": 47,
    "hp": 2513,
    "exp": 117,
    "def": 15,
@@ -605,6 +657,7 @@ window.WORLD_DATA = {
   "m59": {
    "name": "Rafflesia",
    "level": 47,
+   "effectiveLevel": 47,
    "hp": 2285,
    "exp": 117,
    "def": 20,
@@ -616,6 +669,7 @@ window.WORLD_DATA = {
   "m700006": {
    "name": "Shade",
    "level": 48,
+   "effectiveLevel": 48,
    "hp": 47000,
    "exp": 488,
    "def": 30,
@@ -628,6 +682,7 @@ window.WORLD_DATA = {
   "m43": {
    "name": "Wraith",
    "level": 48,
+   "effectiveLevel": 48,
    "hp": 2350,
    "exp": 122,
    "def": 30,
@@ -639,6 +694,7 @@ window.WORLD_DATA = {
   "m44": {
    "name": "Clang",
    "level": 49,
+   "effectiveLevel": 49,
    "hp": 2657,
    "exp": 127,
    "def": 15,
@@ -650,6 +706,7 @@ window.WORLD_DATA = {
   "m45": {
    "name": "Drake",
    "level": 50,
+   "effectiveLevel": 50,
    "hp": 2950,
    "exp": 133,
    "def": 15,
@@ -661,6 +718,7 @@ window.WORLD_DATA = {
   "m60": {
    "name": "Duskmander",
    "level": 50,
+   "effectiveLevel": 50,
    "hp": 2682,
    "exp": 133,
    "def": 0,
@@ -672,6 +730,7 @@ window.WORLD_DATA = {
   "m46": {
    "name": "Croco",
    "level": 52,
+   "effectiveLevel": 52,
    "hp": 3136,
    "exp": 146,
    "def": 10,
@@ -683,6 +742,7 @@ window.WORLD_DATA = {
   "m61": {
    "name": "Myewood",
    "level": 54,
+   "effectiveLevel": 54,
    "hp": 3924,
    "exp": 160,
    "def": 10,
@@ -694,6 +754,7 @@ window.WORLD_DATA = {
   "m47": {
    "name": "Malady",
    "level": 55,
+   "effectiveLevel": 55,
    "hp": 2998,
    "exp": 167,
    "def": 0,
@@ -705,6 +766,7 @@ window.WORLD_DATA = {
   "m700002": {
    "name": "Zombie Mushmom",
    "level": 55,
+   "effectiveLevel": 55,
    "hp": 66640,
    "exp": 668,
    "def": 10,
@@ -717,6 +779,7 @@ window.WORLD_DATA = {
   "m62": {
    "name": "Rotten Mushroom",
    "level": 56,
+   "effectiveLevel": 56,
    "hp": 3520,
    "exp": 183,
    "def": 20,
@@ -728,6 +791,7 @@ window.WORLD_DATA = {
   "m48": {
    "name": "Stone Golem",
    "level": 56,
+   "effectiveLevel": 56,
    "hp": 5134,
    "exp": 175,
    "def": 30,
@@ -739,6 +803,7 @@ window.WORLD_DATA = {
   "m67": {
    "name": "Skeleton Soldier",
    "level": 57,
+   "effectiveLevel": 57,
    "hp": 3872,
    "exp": 183,
    "def": 15,
@@ -750,6 +815,7 @@ window.WORLD_DATA = {
   "m49": {
    "name": "Dark Stone Golem",
    "level": 58,
+   "effectiveLevel": 58,
    "hp": 5428,
    "exp": 192,
    "def": 0,
@@ -761,6 +827,7 @@ window.WORLD_DATA = {
   "m63": {
    "name": "Sporewood",
    "level": 59,
+   "effectiveLevel": 59,
    "hp": 4834,
    "exp": 201,
    "def": 0,
@@ -772,6 +839,7 @@ window.WORLD_DATA = {
   "m50": {
    "name": "Red Drake",
    "level": 60,
+   "effectiveLevel": 60,
    "hp": 5184,
    "exp": 211,
    "def": 15,
@@ -783,6 +851,7 @@ window.WORLD_DATA = {
   "m700003": {
    "name": "Rotten Mushmom",
    "level": 60,
+   "effectiveLevel": 60,
    "hp": 86400,
    "exp": 844,
    "def": 20,
@@ -795,6 +864,7 @@ window.WORLD_DATA = {
   "m51": {
    "name": "Wild Kargo",
    "level": 62,
+   "effectiveLevel": 62,
    "hp": 5057,
    "exp": 231,
    "def": 30,
@@ -806,6 +876,7 @@ window.WORLD_DATA = {
   "m68": {
    "name": "Officer Skeleton",
    "level": 63,
+   "effectiveLevel": 63,
    "hp": 5976,
    "exp": 242,
    "def": 15,
@@ -817,6 +888,7 @@ window.WORLD_DATA = {
   "m52": {
    "name": "Tauromacis",
    "level": 70,
+   "effectiveLevel": 70,
    "hp": 9328,
    "exp": 337,
    "def": 25,
@@ -828,6 +900,7 @@ window.WORLD_DATA = {
   "m69": {
    "name": "Commander Skeleton",
    "level": 73,
+   "effectiveLevel": 73,
    "hp": 11915,
    "exp": 390,
    "def": 15,
@@ -839,6 +912,7 @@ window.WORLD_DATA = {
   "m53": {
    "name": "Taurospear",
    "level": 75,
+   "effectiveLevel": 75,
    "hp": 12535,
    "exp": 429,
    "def": 5,
@@ -850,6 +924,7 @@ window.WORLD_DATA = {
   "m700001": {
    "name": "Jr. Balrog",
    "level": 80,
+   "effectiveLevel": 80,
    "hp": 325400,
    "exp": 2188,
    "def": 15,
@@ -862,6 +937,7 @@ window.WORLD_DATA = {
   "m92": {
    "name": "Super Ribbon Pig",
    "level": 200,
+   "effectiveLevel": 200,
    "hp": 9999,
    "def": 999,
    "mdef": 999,
