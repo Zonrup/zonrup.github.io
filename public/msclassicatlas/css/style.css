@@ -291,8 +291,8 @@ html, body {
 .label-mode { display: flex; flex-direction: column; gap: 2px; }
 .label-mode > label { font-weight: 600; }
 .label-mode .ticks { display: flex; justify-content: space-between; font-size: 12px; }
-.label-mode .ticks span { cursor: pointer; padding: 0 2px; opacity: .6; }
-.label-mode .ticks span.on { font-weight: 700; opacity: 1; color: var(--ink); }
+.label-mode .ticks > span { cursor: pointer; padding: 0 2px; opacity: .6; }
+.label-mode .ticks > span.on { font-weight: 700; opacity: 1; color: var(--ink); }
 .check input { accent-color: var(--accent); }
 
 .btn {
@@ -531,8 +531,14 @@ body.panel-open #panel { transform: none; }
   color: var(--ink);
   font-size: 12px;
 }
-#tooltip .tt-hit { font-weight: 600; }
-#tooltip .tt-hits ul { margin: 0 0 2px; padding-left: 16px; }
+#tooltip { max-width: 340px; }
+#tooltip .tt-hit { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+#tooltip .tt-hit .tt-name { flex: 1; min-width: 0; }
+/* A small monster sprite, about the text's height, so it doesn't dominate the tooltip. */
+#tooltip .tt-mob { flex: none; width: 20px; height: 18px; object-fit: contain; }
+#tooltip .tt-hit .rk-stars { margin-left: 8px; }
+#tooltip .tt-hit .rk-stars { flex: none; font-size: 12px; }
+#tooltip .tt-hits ul { margin: 0 0 2px; padding-left: 42px; } /* bullets line up under the name, past the sprite */
 #tooltip .tt-kind { font-size: 10px; font-weight: 700; color: #1d7d72; }
 
 /* Common drops, shown on hovering a monster card (picker) or monster row (panel). */
@@ -670,3 +676,93 @@ body.editing #editBar { display: flex; }
 /* Found by search: the same teal as monster rows and the world map's rings. */
 .npc-row.found { background: #d6f7f2; border-color: #2aa89a; }
 .npc-row.found .npc-chip { background: #7fe3d6; box-shadow: 0 0 0 2px rgba(42, 168, 154, .5); }
+
+/* ---------- Map rankings (the picker's subdialog) ---------- */
+.btn.small { font-size: 12px; padding: 3px 8px; }
+.btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.dialog.ranking > #pickedChips, .dialog.ranking > #mobFilter, .dialog.ranking > #mapChips,
+.dialog.ranking > #pickerTabs, .dialog.ranking > #mobGrid, .dialog.ranking > footer { display: none; }
+.dialog:not(.ranking) > .rank-only { display: none; }
+.dialog > .rank-cards { flex: 1 1 auto; min-height: 0; }
+.rank-head { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.rank-cards { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px 4px 4px 2px; }
+.rank-card {
+  --rk-row: 30px;
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  padding: 10px;
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  background: #fffaf0;
+}
+.rank-card.has-items { grid-template-columns: 120px minmax(0, 150px) 1fr; }
+.rank-mob { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.rank-mob .sprite { height: 72px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.rank-mob .sprite img { max-height: 72px; max-width: 100%; object-fit: contain; }
+.rank-mob .mob-name {
+  font-weight: 700; font-size: 13px; line-height: 1.15; text-align: center;
+  text-shadow: -1px -1px 0 #2b1a0e, 1px -1px 0 #2b1a0e, -1px 1px 0 #2b1a0e, 1px 1px 0 #2b1a0e,
+    0 -1px 0 #2b1a0e, 0 1px 0 #2b1a0e, -1px 0 0 #2b1a0e, 1px 0 0 #2b1a0e;
+}
+.rank-mob .mob-lv { font-size: 11px; color: var(--ink-soft); font-weight: 600; text-align: center; }
+.rk-reset { font: inherit; font-size: 11px; font-weight: 600; border: 0; background: transparent; color: var(--accent); cursor: pointer; text-decoration: underline; }
+.rank-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; }
+.rank-items li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; background: #d6f7f2; border: 1px solid #6fd3c6; }
+.rank-items img { height: 22px; max-width: 26px; object-fit: contain; }
+/* The map list is a fixed 10 rows tall and scrolls inside the card. */
+.rank-list {
+  list-style: none; margin: 0; padding: 0 2px 0 0;
+  height: calc(10 * var(--rk-row));
+  overflow-y: auto;
+  border: 1px solid var(--parchment-2); border-radius: 8px; background: #fff;
+}
+.rank-tier {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 8px;
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  background: var(--parchment-2); color: var(--ink);
+}
+.rank-tier[data-tier="best"] { background: #cdeec9; }
+.rank-tier[data-tier="okay"] { background: #f6e7b4; }
+.rank-tier[data-tier="meh"] { background: #e6ddd0; }
+.rk-stars { display: inline-flex; gap: 1px; font-size: 14px; line-height: 1; letter-spacing: 0; }
+.rk-stars span { color: transparent; -webkit-text-stroke: 1px #9a8466; }
+.label-mode .ticks .rk-stars { display: flex; font-size: 11px; justify-content: inherit; }
+#rankTicks > span { display: flex; flex-direction: column; align-items: center; }
+#rankTicks > span:first-child { align-items: flex-start; }
+#rankTicks > span:last-child { align-items: flex-end; }
+.rk-stars span.on { color: #f2b01e; -webkit-text-stroke: 1px #a8740a; }
+.rank-tier .n { font-size: 11px; padding: 0 6px; border-radius: 999px; background: rgba(255,255,255,.7); }
+.rank-empty { height: var(--rk-row); display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-style: italic; color: var(--ink-soft); }
+.rank-row {
+  height: var(--rk-row);
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 4px 0 10px;
+  font-size: 13px; font-weight: 600;
+  border-top: 1px solid #f1e8d4;
+  background: #fff;
+}
+.rank-row.dragging { background: #e3f9f5; box-shadow: 0 2px 8px rgba(0,0,0,.18); position: relative; z-index: 2; }
+.rk-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-in { font-size: 11px; color: var(--ink-soft); font-weight: 500; }
+.rk-stat { flex: none; font-size: 11px; color: var(--ink-soft); }
+.rk-find {
+  flex: none; font: inherit; font-size: 12px; font-weight: 600;
+  border: 1.5px solid var(--edge); border-radius: 999px; background: #fff6dc; color: var(--ink);
+  padding: 0 10px; cursor: pointer;
+}
+.rk-find:hover { border-color: var(--ink); }
+.rk-drag { flex: none; width: 22px; text-align: center; font-size: 18px; color: var(--ink-soft); cursor: grab; touch-action: none; user-select: none; }
+.drag-active, .drag-active * { cursor: grabbing !important; user-select: none; }
+@media (max-width: 600px) {
+  .rank-card, .rank-card.has-items { grid-template-columns: 1fr; }
+  .rk-stat { display: none; }
+}
+
+/* "Find in map" from the rankings: the HUD swaps its search and map toggles for this bar. */
+.rank-focus-bar { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.rank-focus-bar[hidden] { display: none; }
+.rank-focus-bar .btn.small { align-self: center; }
+body.rank-focus #hud .search-row, body.rank-focus #searchHint, body.rank-focus #hud .check, body.rank-focus #editToggle { display: none; }

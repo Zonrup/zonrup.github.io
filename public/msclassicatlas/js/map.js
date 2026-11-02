@@ -77,9 +77,33 @@
       const count = typeof entry === "string" ? null : entry.count ?? null;
       const mob = mobs[id];
       if (!mob) console.warn(`Map "${m.id}" lists unknown monster "${id}"`);
-      return mob ? { id, count, ...mob } : { id, count, name: id, level: 0 };
+      return mob ? { id, count, ...mob, name: mobName[id] } : { id, count, name: id, level: 0 };
     });
   }
+
+  // Monster id -> the name the page shows. When several monsters share a name (two Zombie
+  // Mushroom levels), the one on the most maps keeps it and the others get " (Lv N)", so
+  // each has its own picker card, ranking and drops. tools/build_rankings.py does the same.
+  const mobName = (() => {
+    const onMaps = new Map(), byName = new Map(), out = {};
+    for (const m of maps) {
+      for (const e of m.mobs || []) {
+        const id = typeof e === "string" ? e : e.id;
+        if (!onMaps.has(id)) onMaps.set(id, new Set());
+        onMaps.get(id).add(m.id);
+      }
+    }
+    for (const [id, mob] of Object.entries(mobs)) {
+      if (!byName.has(mob.name)) byName.set(mob.name, []);
+      byName.get(mob.name).push(id);
+    }
+    for (const [name, ids] of byName) {
+      const n = (id) => onMaps.get(id)?.size || 0;
+      ids.sort((a, b) => n(b) - n(a) || (mobs[a].level || 0) - (mobs[b].level || 0) || (a < b ? -1 : 1));
+      ids.forEach((id, k) => { out[id] = k ? `${name} (Lv ${mobs[id].level || 0})` : name; });
+    }
+    return out;
+  })();
 
   // Share of a map's spawns that sets its color: the map takes the level that this
   // share of spawns is at or above. An average lets a crowd of snails hide the stumps
@@ -258,6 +282,8 @@
     showHidden: true,
     labelMode: "smart", // "none" | "smart" | "all"
     showForgottenHollow: false,
+    rankShow: "okay", // lowest ranking tier whose maps a monster/item search rings: "best" | "okay" | "meh"
+    rankFocus: null,  // { g, m } while "Find in map" from the rankings shows one map
     edit: false,
     mobHit: null, // { ids, maps: Set } while a monster search is highlighting maps
     npcHit: null, // { names: Set, maps: Set } while an NPC search is highlighting maps
@@ -272,20 +298,24 @@
     if (["none", "smart", "all"].includes(saved.labelMode)) state.labelMode = saved.labelMode;
     else if (saved.showLabels === true) state.labelMode = "all"; // old "Always show labels"
     if (typeof saved.showForgottenHollow === "boolean") state.showForgottenHollow = saved.showForgottenHollow;
+    if (["best", "okay", "meh"].includes(saved.rankShow)) state.rankShow = saved.rankShow;
   } catch (_) { /* storage unavailable */ }
 
   function savePrefs() {
     try {
       localStorage.setItem("wm-prefs", JSON.stringify({
         level: state.level, showHidden: state.showHidden, labelMode: state.labelMode,
-        showForgottenHollow: state.showForgottenHollow,
+        showForgottenHollow: state.showForgottenHollow, rankShow: state.rankShow,
       }));
     } catch (_) { /* ignore */ }
   }
 
   function isVisible(m) {
-    if (m.area === "forgotten_hollow" && !state.showForgottenHollow) return false;
-    if (m.type === "hidden") return state.showHidden;
+    // "Find in map" from the rankings shows hidden streets and Forgotten Hollow without
+    // changing the checkboxes.
+    const force = !!state.rankFocus;
+    if (m.area === "forgotten_hollow" && !state.showForgottenHollow && !force) return false;
+    if (m.type === "hidden") return state.showHidden || force;
     if (hostOf.has(m)) return false; // buildings live in their host's panel, not on the map
     return true;
   }
@@ -1679,14 +1709,19 @@
     const rows = [];
     for (const name of mobNames) {
       const items = sel.items.filter((it) => it.mobs.has(name)).map((it) => it.name);
-      if (sel.mobs.has(name) || items.length) rows.push({ name, items });
+      if (!sel.mobs.has(name) && !items.length) continue;
+      // Its ranking here: the best tier among this map and its buildings.
+      const g = groupByName.get(name);
+      const tiers = g ? here.map((x) => rankingOf(g).tierOf.get(x)).filter((t) => t != null) : [];
+      rows.push({ name, items, img: g?.img || null, stars: tiers.length ? 3 - Math.min(...tiers) : 0 });
     }
     const npcs = here.flatMap((x) => (window.MINIMAP_INFO?.[x.mapId]?.npcs || []).map(([, , name]) => name))
       .filter((name, i, a) => sel.npcs.has(name) && a.indexOf(name) === i);
     if (!rows.length && !npcs.length) return "";
     let h = `<div class="tt-hits">`;
     for (const r of rows) {
-      h += `<div class="tt-hit">${esc(r.name)}</div>`;
+      const icon = r.img ? `<img class="tt-mob" src="${esc(r.img)}" alt="">` : `<span class="tt-mob"></span>`;
+      h += `<div class="tt-hit">${icon}<span class="tt-name">${esc(r.name)}</span>${r.stars ? starsHtml(r.stars) : ""}</div>`;
       if (r.items.length) h += `<ul>${r.items.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`;
     }
     for (const name of npcs) h += `<div class="tt-hit">${esc(npcLabel(name))} <span class="tt-kind">NPC</span></div>`;
@@ -2051,6 +2086,23 @@
     labelModeInput.value = i;
     labelModeInput.dispatchEvent(new Event("input"));
   }));
+  // Rankings to show: a monster or item search only rings maps ranked at this tier or better.
+  const RANK_SHOW = ["best", "okay", "meh"], rankShowInput = document.getElementById("rankShowRange");
+  const syncRankTicks = () => {
+    document.querySelectorAll("#rankTicks > span").forEach((s, i) => s.classList.toggle("on", RANK_SHOW[i] === state.rankShow));
+  };
+  rankShowInput.value = RANK_SHOW.indexOf(state.rankShow);
+  syncRankTicks();
+  rankShowInput.addEventListener("input", () => {
+    state.rankShow = RANK_SHOW[+rankShowInput.value] || "okay";
+    syncRankTicks(); savePrefs(); updateHighlight();
+  });
+  // Each tick gets its tier's stars above the word.
+  document.querySelectorAll("#rankTicks > span").forEach((s, i) => s.insertAdjacentHTML("afterbegin", starsHtml(3 - i)));
+  document.querySelectorAll("#rankTicks > span").forEach((s, i) => s.addEventListener("click", () => {
+    rankShowInput.value = i;
+    rankShowInput.dispatchEvent(new Event("input"));
+  }));
   showHidden.addEventListener("change", () => {
     state.showHidden = showHidden.checked;
     if (state.selected && !isVisible(state.selected)) select(null);
@@ -2103,12 +2155,12 @@
     }
   }
 
-  // One entry per monster name (same-name variants, like the two Zombie Mushroom levels,
-  // are merged), only monsters that spawn somewhere, sorted by level then name.
+  // One entry per monster name (see mobName: same-name variants get their own name), only
+  // monsters that spawn somewhere, sorted by level then name.
   const mobGroups = (() => {
     const byName = new Map();
     for (const id of mapsByMob.keys()) {
-      const name = mobs[id].name;
+      const name = mobName[id];
       if (!byName.has(name)) byName.set(name, { name, ids: [] });
       byName.get(name).ids.push(id);
     }
@@ -2149,6 +2201,60 @@
     return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   })();
   const itemByName = new Map(itemGroups.map((it) => [it.name, it]));
+
+  // Farming-spot rankings: per monster, its maps in three tiers (best, okay, meh), best
+  // first. Defaults come from data/rankings.js (tools/build_rankings.py); edits made in the
+  // rankings view are saved in this browser and replace the default for that monster.
+  // Maps a ranking doesn't list (new data) go at the end of "meh".
+  const RANK_TIERS = ["best", "okay", "meh"];
+  const RANK_LABEL = { best: "Best", okay: "Okay", meh: "Meh" };
+  const DEFAULT_RANKINGS = window.MAP_RANKINGS || {};
+  const RANK_KEY = "wm-rankings";
+  let rankEdits = {};
+  try { rankEdits = JSON.parse(localStorage.getItem(RANK_KEY) || "{}") || {}; } catch (_) { /* storage unavailable */ }
+  function saveRankEdits() { try { localStorage.setItem(RANK_KEY, JSON.stringify(rankEdits)); } catch (_) { /* ignore */ } }
+  function resolveRanking(g, src = {}) {
+    const out = { best: [], okay: [], meh: [] }, seen = new Set();
+    for (const t of RANK_TIERS) {
+      for (const id of src[t] || []) {
+        const m = byId.get(id);
+        if (m && g.maps.has(m) && !seen.has(m)) { seen.add(m); out[t].push(m); }
+      }
+    }
+    out.meh.push(...[...g.maps].filter((m) => !seen.has(m)).sort((a, b) => a.name.localeCompare(b.name)));
+    out.tierOf = new Map(RANK_TIERS.flatMap((t, i) => out[t].map((m) => [m, i])));
+    return out;
+  }
+  // n of 3 stars, filled from the left (best 3, okay 2, meh 1).
+  function starsHtml(n) { // a function so the HUD slider can use it before this point
+    return `<span class="rk-stars" aria-label="${n} of 3 stars">${[0, 1, 2].map((i) => `<span class="${i < n ? "on" : ""}">★</span>`).join("")}</span>`;
+  }
+  const tierStars = (t) => 3 - RANK_TIERS.indexOf(t);
+  const rankIds = (r) => Object.fromEntries(RANK_TIERS.map((t) => [t, r[t].map((m) => m.id)]));
+  const rankCache = new Map();
+  function rankingOf(g) {
+    if (!rankCache.has(g.name)) rankCache.set(g.name, resolveRanking(g, rankEdits[g.name] || DEFAULT_RANKINGS[g.name]));
+    return rankCache.get(g.name);
+  }
+  const rankEdited = (g) => !!rankEdits[g.name];
+  // Save a monster's ranking ({best: [map ids], ...}), or null to go back to the default.
+  function setRanking(g, ids) {
+    const same = ids && JSON.stringify(rankIds(resolveRanking(g, ids))) === JSON.stringify(rankIds(resolveRanking(g, DEFAULT_RANKINGS[g.name])));
+    if (!ids || same) delete rankEdits[g.name]; else rankEdits[g.name] = ids;
+    rankCache.delete(g.name);
+    saveRankEdits();
+    updateHighlight();
+  }
+  // Does map m pass the "Rankings to show" slider for monster group g?
+  const rankPasses = (g, m) => (rankingOf(g).tierOf.get(m) ?? 2) <= RANK_TIERS.indexOf(state.rankShow);
+  // Every monster's ranking (edited or default) as a data/rankings.js file.
+  function rankingsFileText() {
+    const all = {};
+    for (const g of [...mobGroups].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) all[g.name] = rankIds(rankingOf(g));
+    return "// Default farming-spot rankings: monster name -> map ids per tier, best first.\n"
+      + "// Generated by tools/build_rankings.py; can be replaced by the page's \"Download all rankings\".\n"
+      + "window.MAP_RANKINGS = " + JSON.stringify(all, null, 1) + ";\n";
+  }
 
   // Crafting stations are NPCs on the minimaps; these also match their craft's name
   // (and "crafting station"), so "smithing" finds the Anvil.
@@ -2235,10 +2341,23 @@
   // Maps that a list of monster groups rings. A monster inside a building rings the
   // building's host (buildings aren't drawn).
   const ringMaps = (groups) => new Set(groups.flatMap((g) => [...g.maps].map((m) => hostOf.get(m) || m)));
+  // The same, keeping only maps that pass the "Rankings to show" slider for that monster.
+  const rankedRingMaps = (groups) => new Set(groups.flatMap((g) => [...g.maps].filter((m) => rankPasses(g, m)).map((m) => hostOf.get(m) || m)));
 
   // Rings come from the typing and the picks together (plus the dialog filter's preview
   // while nothing is picked). The box under the search bar lists each in its own row.
   function updateHighlight() {
+    updateRankButton();
+    // "Find in map" from the rankings: ring only that map, for that monster.
+    if (state.rankFocus) {
+      const { g, m } = state.rankFocus;
+      state.mobHit = { ids: g.ids, maps: new Set([hostOf.get(m) || m]) };
+      state.npcHit = null;
+      state.sel = { mobs: new Set([g.name]), items: [], npcs: new Set() };
+      paintNpcs(); paintMobs();
+      needsDraw = true;
+      return;
+    }
     // A typed item rings the maps of every monster that drops it.
     const mobTyped = typedRings();
     const itemGs = (typed.items.length <= SEARCH_MAX_MOBS ? typed.items : []).map((n) => itemByName.get(n)).filter(Boolean);
@@ -2248,10 +2367,10 @@
     const pickedNpcGs = [...pickedNpcs].map(npcGroupByName).filter(Boolean);
     const fromPicks = pickCount() ? [...picked, ...pickedItemGs.flatMap((it) => it.mobs)] : previewNames;
     const groups = [...new Set([...fromTyping, ...fromPicks])].map((n) => groupByName.get(n)).filter(Boolean);
-    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: ringMaps(groups) } : null;
-    const typedMaps = ringMaps(fromTyping.map((n) => groupByName.get(n)).filter(Boolean)).size;
+    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: rankedRingMaps(groups) } : null;
+    const typedMaps = rankedRingMaps(fromTyping.map((n) => groupByName.get(n)).filter(Boolean)).size;
     const pickedMobGroups = [...new Set([...picked, ...pickedItemGs.flatMap((it) => it.mobs)])].map((n) => groupByName.get(n)).filter(Boolean);
-    const pickedMaps = new Set([...ringMaps(pickedMobGroups), ...pickedNpcGs.flatMap((g) => [...g.maps])]).size;
+    const pickedMaps = new Set([...rankedRingMaps(pickedMobGroups), ...pickedNpcGs.flatMap((g) => [...g.maps])]).size;
 
     // NPCs: typed (crafting stations ring together however many match: "crafting station"
     // finds all six) and picked.
@@ -2379,6 +2498,7 @@
 
   function openMobDialog(initial = "") {
     mobFilter.value = initial;
+    showRankView(false);
     mobDialog.hidden = false;
     onFilterChange(); // opens on a tab that matches the typed text
     mobFilter.focus();
@@ -2433,25 +2553,47 @@
 
   // Search box: live rings while typing.
   search.addEventListener("input", () => { typed = prefixMatches(search.value); updateHighlight(); });
-  // Enter leaves the box and moves the map: an exact map name opens that map; else it
-  // deselects and zooms to the ringed monster/NPC maps; else it opens the first matching map.
-  // The rings stay. (Tab then Enter opens the picker instead.)
+  // The one monster, item or NPC the typing names, as [kind, name], or null. A single
+  // monster also wins when every matching item is dropped only by it ("green mushroom":
+  // the Green Mushroom, not also its Green Mushroom Cap).
+  function uniqueTyped(t) {
+    const all = [...t.mobs.map((n) => ["mobs", n]), ...t.items.map((n) => ["items", n]), ...t.npcs.map((n) => ["npcs", n])];
+    if (all.length === 1) return all[0];
+    if (t.mobs.length === 1 && !t.npcs.length && t.items.every((n) => { const ms = itemByName.get(n)?.mobs || []; return ms.length === 1 && ms[0] === t.mobs[0]; })) return ["mobs", t.mobs[0]];
+    return null;
+  }
+
+  // Enter in the box: an exact map name opens that map. Else, when the typing names one
+  // monster, item or NPC (uniqueTyped), it's picked (the box clears and it moves to the
+  // Picked row) and the map zooms to its rings. Else, with several matches, the picker
+  // opens with the typing as its filter. With only map names matching, the first opens.
+  // (Tab then Enter opens the picker too.)
   search.addEventListener("keydown", (ev) => {
     if (ev.key !== "Enter") return;
     ev.preventDefault();
-    search.blur();
     typed = prefixMatches(search.value);
     updateHighlight();
     const exact = maps.find((x) => x.name.toLowerCase() === typed.q);
-    if (exact) { reveal(exact); select(exact); return; }
-    const hits = new Set([...(state.mobHit?.maps || []), ...(state.npcHit?.maps || [])]);
-    if (hits.size) {
-      for (const m of hits) reveal(m);
-      select(null);
-      animateTo(fitPoints([...hits].map((m) => [m.x, m.y]), 90, 1.4));
+    if (exact) { search.blur(); reveal(exact); select(exact); return; }
+    const one = uniqueTyped(typed);
+    if (one) {
+      search.blur();
+      pickSets[one[0]].add(one[1]);
+      search.value = "";
+      typed = prefixMatches("");
+      updateHighlight();
+      const hits = new Set([...(state.mobHit?.maps || []), ...(state.npcHit?.maps || [])]);
+      if (hits.size) {
+        for (const m of hits) reveal(m);
+        select(null);
+        animateTo(fitPoints([...hits].map((m) => [m.x, m.y]), 90, 1.4));
+      }
       return;
     }
+    if (typed.mobs.length || typed.items.length || typed.npcs.length) { openMobDialog(search.value.trim()); return; }
+    search.blur();
     if (typed.maps[0]) { reveal(typed.maps[0]); select(typed.maps[0]); }
+    else if (typed.q) toast("No matches");
   });
 
   // Picker icon: next in tab order after the box. Opens with the typed text as its filter;
@@ -2522,7 +2664,208 @@
     if (m) { closeMobDialog(); reveal(m); select(m); }
     else toast("Pick something, or keep typing");
   });
-  mobDialog.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { ev.stopPropagation(); closeMobDialog(); } });
+  mobDialog.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || rowDrag) return;
+    ev.stopPropagation();
+    if (rankView) showRankView(false); else closeMobDialog(); // Esc in the rankings goes back first
+  });
+
+  // ---------------------------------------------------------------------------
+  // Rankings view ("Show map rankings"): a card per picked monster (and per monster that
+  // drops a picked item), each listing its maps by tier. Maps are dragged between tiers by
+  // their ⠿ handle; "Find" shows one map on the world map (see enterRankFocus).
+  // ---------------------------------------------------------------------------
+  const dialogEl = mobDialog.querySelector(".dialog"), dialogTitle = document.getElementById("mobDialogTitle");
+  const rankCards = document.getElementById("rankCards"), rankOpen = document.getElementById("rankOpen");
+  // The most monsters one item drops from, so picking any single item can always be ranked.
+  const RANK_CAP = Math.max(1, ...itemGroups.map((it) => it.mobs.length));
+  let rankView = false;
+
+  // Picked monsters, then the monsters that drop picked items (NPCs can't be farmed).
+  function rankGroups() {
+    const names = [...picked];
+    for (const n of pickedItems) for (const mob of itemByName.get(n)?.mobs || []) if (!names.includes(mob)) names.push(mob);
+    return names.map((n) => groupByName.get(n)).filter(Boolean);
+  }
+  // Greyed out with aria-disabled (not disabled) so its tooltip still shows.
+  function updateRankButton() {
+    const n = rankGroups().length;
+    const why = !n ? "Pick a monster or an item first" : n > RANK_CAP ? `Too many monsters selected, max ${RANK_CAP}` : "";
+    rankOpen.setAttribute("aria-disabled", why ? "true" : "false");
+    rankOpen.title = why || `Rank the maps of ${plural(n, "monster")}`;
+  }
+
+  function showRankView(on) {
+    rankView = on;
+    dialogEl.classList.toggle("ranking", on);
+    dialogTitle.textContent = on ? "Map rankings" : "Find anything";
+    hideDrops();
+    if (on) renderRankCards();
+  }
+
+  // A monster's share of the spawns on map m (its spawn count / all spawns there).
+  function spawnShare(g, m) {
+    let mine = 0, all = 0;
+    for (const x of mobList(m)) {
+      const c = x.count || 1;
+      all += c;
+      if (g.ids.includes(x.id)) mine += c;
+    }
+    return { mine, pct: all ? Math.round((100 * mine) / all) : 0 };
+  }
+
+  function rankCardHtml(g) {
+    const r = rankingOf(g), d = DIFF[diffFor(g.level, state.level)];
+    const items = [...pickedItems].map((n) => itemByName.get(n)).filter((it) => it && it.mobs.includes(g.name));
+    let list = "";
+    for (const t of RANK_TIERS) {
+      list += `<li class="rank-tier" data-tier="${t}">${starsHtml(tierStars(t))}${RANK_LABEL[t]}<span class="n">${r[t].length}</span></li>`;
+      if (!r[t].length) list += `<li class="rank-empty">No maps. Drag one here</li>`;
+      for (const m of r[t]) {
+        const sh = spawnShare(g, m), host = hostOf.get(m);
+        const where = host ? ` <span class="rk-in">in ${esc(host.name)}</span>` : "";
+        list += `<li class="rank-row" data-map="${esc(m.id)}"><span class="rk-name">${esc(m.name)}${where}</span>
+          <span class="rk-stat" title="${sh.mine} spawns, ${sh.pct}% of the monsters on this map">×${sh.mine} · ${sh.pct}%</span>
+          <button type="button" class="rk-find" title="Find ${esc(m.name)} on the map">Find</button>
+          <span class="rk-drag" title="Drag to reorder" aria-hidden="true">⠿</span></li>`;
+      }
+    }
+    return `<section class="rank-card${items.length ? " has-items" : ""}" data-mob="${esc(g.name)}">
+      <div class="rank-mob">
+        <div class="sprite">${g.img ? `<img src="${esc(g.img)}" alt="">` : ""}</div>
+        <div class="mob-name" style="color:${d.color}">${esc(g.name)}</div>
+        <div class="mob-lv">Lv ${g.levels.join("/")} · ${plural(g.maps.size, "map")}</div>
+        ${rankEdited(g) ? `<button type="button" class="rk-reset" title="Undo your edits to this ranking">Reset to default</button>` : ""}
+      </div>
+      ${items.length ? `<ul class="rank-items">${items.map((it) => `<li>${it.icon ? `<img src="${esc(it.icon)}" alt="">` : ""}<span>${esc(it.name)}</span></li>`).join("")}</ul>` : ""}
+      <ol class="rank-list">${list}</ol>
+    </section>`;
+  }
+  function renderRankCards() {
+    const gs = rankGroups();
+    rankCards.innerHTML = gs.length ? gs.map(rankCardHtml).join("") : `<div class="mob-empty">Pick a monster or an item first</div>`;
+  }
+  // Redraw one card, keeping its list's scroll position.
+  function rerenderRankCard(card) {
+    const g = groupByName.get(card.dataset.mob), top = card.querySelector(".rank-list").scrollTop;
+    card.outerHTML = rankCardHtml(g);
+    const fresh = rankCards.querySelector(`.rank-card[data-mob="${CSS.escape(g.name)}"]`);
+    if (fresh) fresh.querySelector(".rank-list").scrollTop = top;
+  }
+
+  rankOpen.addEventListener("click", () => {
+    if (rankOpen.getAttribute("aria-disabled") === "true") return;
+    showRankView(true);
+    rankCards.scrollTop = 0;
+  });
+  document.getElementById("rankBack").addEventListener("click", () => { showRankView(false); renderPicker(); });
+  document.getElementById("rankDownload").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([rankingsFileText()], { type: "text/javascript" }));
+    a.download = "rankings.js";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  rankCards.addEventListener("click", (ev) => {
+    const card = ev.target.closest(".rank-card");
+    if (!card) return;
+    const g = groupByName.get(card.dataset.mob);
+    if (ev.target.closest(".rk-reset")) { setRanking(g, null); rerenderRankCard(card); return; }
+    const find = ev.target.closest(".rk-find");
+    if (find) enterRankFocus(g, byId.get(find.closest(".rank-row").dataset.map));
+  });
+
+  // Dragging a map row by its handle (pointer events, so touch works too). The row moves
+  // live through the list; dropping saves the new order and tiers.
+  let rowDrag = null;
+  rankCards.addEventListener("pointerdown", (ev) => {
+    const handle = ev.target.closest(".rk-drag");
+    if (!handle || ev.button > 0) return;
+    ev.preventDefault();
+    const row = handle.closest(".rank-row"), list = row.parentElement;
+    handle.setPointerCapture(ev.pointerId);
+    rowDrag = { row, list, card: row.closest(".rank-card"), y: ev.clientY, timer: setInterval(dragTick, 30) };
+    row.classList.add("dragging");
+    list.classList.add("drag-active");
+  });
+  rankCards.addEventListener("pointermove", (ev) => {
+    if (!rowDrag) return;
+    rowDrag.y = ev.clientY;
+    placeDragged();
+  });
+  // Near the list's top or bottom edge, scroll it (and keep placing the row).
+  function dragTick() {
+    const r = rowDrag.list.getBoundingClientRect(), edge = 28;
+    const dy = rowDrag.y < r.top + edge ? -8 : rowDrag.y > r.bottom - edge ? 8 : 0;
+    if (dy) { rowDrag.list.scrollTop += dy; placeDragged(); }
+  }
+  function placeDragged() {
+    const { row, list, y } = rowDrag;
+    const items = [...list.children].filter((el) => el !== row && !el.classList.contains("rank-empty"));
+    let before = items.find((el) => { const r = el.getBoundingClientRect(); return y < r.top + r.height / 2; }) || null;
+    if (before === items[0]) before = items[1] || null; // never above the "Best" heading
+    if (before ? row.nextElementSibling !== before : list.lastElementChild !== row) list.insertBefore(row, before);
+  }
+  function endDrag() {
+    if (!rowDrag) return;
+    const { row, list, card, timer } = rowDrag;
+    clearInterval(timer);
+    rowDrag = null;
+    row.classList.remove("dragging");
+    list.classList.remove("drag-active");
+    const ids = { best: [], okay: [], meh: [] };
+    let tier = "best";
+    for (const el of list.children) {
+      if (el.dataset.tier) tier = el.dataset.tier;
+      else if (el.dataset.map) ids[tier].push(el.dataset.map);
+    }
+    setRanking(groupByName.get(card.dataset.mob), ids);
+    rerenderRankCard(card);
+  }
+  rankCards.addEventListener("pointerup", endDrag);
+  rankCards.addEventListener("pointercancel", endDrag);
+
+  // "Find in map": hide the dialog, show that one map (hidden streets and Forgotten Hollow
+  // forced on, without touching the checkboxes) and swap the HUD's search for a bar with
+  // "Return to ranking" and "Exit ranking".
+  const rankFocusBar = document.getElementById("rankFocusBar");
+  let rankScroll = null; // scroll positions to restore on "Return to ranking"
+  function enterRankFocus(g, m) {
+    if (!g || !m) return;
+    rankScroll = { cards: rankCards.scrollTop, lists: Object.fromEntries([...rankCards.querySelectorAll(".rank-card")].map((c) => [c.dataset.mob, c.querySelector(".rank-list").scrollTop])) };
+    if (state.edit) setEdit(false);
+    hideDrops();
+    mobDialog.hidden = true;
+    state.rankFocus = { g, m };
+    document.body.classList.add("rank-focus");
+    rankFocusBar.hidden = false;
+    document.getElementById("rankFocusText").textContent = `Showing map for monster ${g.name}`;
+    updateHighlight();
+    select(m);
+  }
+  function leaveRankFocus() {
+    state.rankFocus = null;
+    document.body.classList.remove("rank-focus");
+    rankFocusBar.hidden = true;
+    if (state.selected && !isVisible(state.selected)) select(null);
+    needsDraw = true;
+  }
+  document.getElementById("rankFocusReturn").addEventListener("click", () => {
+    leaveRankFocus();
+    mobDialog.hidden = false;
+    showRankView(true);
+    if (rankScroll) {
+      rankCards.scrollTop = rankScroll.cards;
+      for (const c of rankCards.querySelectorAll(".rank-card")) c.querySelector(".rank-list").scrollTop = rankScroll.lists[c.dataset.mob] || 0;
+    }
+    updateHighlight();
+  });
+  document.getElementById("rankFocusExit").addEventListener("click", () => {
+    leaveRankFocus();
+    showRankView(false);
+    previewNames = [];
+    updateHighlight();
+  });
   updateHighlight();
 
   document.getElementById("zoomCtl").addEventListener("click", (ev) => {

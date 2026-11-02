@@ -27,6 +27,11 @@
         <input type="number" id="lvlNum" min="1" max="100" value="30">
       </div>
       <input type="range" id="lvlRange" min="1" max="100" value="30">
+      <div id="rankFocusBar" class="rank-focus-bar" hidden>
+        <div class="search-hint"><div class="hint-row"><span class="hint-tag">Ranking</span><span id="rankFocusText" class="hint-text"></span></div></div>
+        <button type="button" class="btn" id="rankFocusReturn">Return to ranking</button>
+        <button type="button" class="btn ghost small" id="rankFocusExit">Exit ranking</button>
+      </div>
       <div class="search-row">
         <input type="search" id="search" placeholder="Find a monster, item, NPC or map" autocomplete="off">
         <button type="button" id="pickerBtn" class="picker-btn" aria-label="Pick monsters, NPCs or items" title="Pick monsters, NPCs or items"><img src="data/mobs/mob_9.gif" alt=""></button>
@@ -41,6 +46,11 @@
         <label for="labelMode">Labels</label>
         <input type="range" id="labelMode" min="0" max="2" step="1" value="1">
         <div class="ticks" id="labelTicks"><span>None</span><span>Smart</span><span>All</span></div>
+      </div>
+      <div class="label-mode">
+        <label for="rankShowRange" title="A monster or item search only rings maps ranked at this tier or better">Rankings to show</label>
+        <input type="range" id="rankShowRange" min="0" max="2" step="1" value="1">
+        <div class="ticks" id="rankTicks"><span>Best</span><span>Okay</span><span>Meh</span></div>
       </div>
       <button id="editToggle" class="btn ghost" title="Drag nodes to lay out the map (`)">Edit layout</button>
     </div>
@@ -83,8 +93,15 @@
       <div id="mapChips" class="map-chips" hidden></div>
       <div id="pickerTabs" class="picker-tabs" role="tablist" aria-label="What to pick"></div>
       <div id="mobGrid" class="mob-grid"></div>
+      <div class="rank-head rank-only">
+        <button type="button" class="btn ghost" id="rankBack">← Back</button>
+        <span>Drag ⠿ to move maps between tiers. Edits are saved in this browser.</span>
+      </div>
+      <div id="rankCards" class="rank-cards rank-only"></div>
       <footer>
+        <button type="button" class="btn ghost small" id="rankDownload" title="Download every monster's ranking (with your edits) as rankings.js">Download all rankings</button>
         <span id="mobSelInfo"></span>
+        <button type="button" class="btn ghost" id="rankOpen" aria-disabled="true">Show map rankings</button>
         <button type="button" class="btn ghost" id="mobClear">Clear</button>
         <button type="button" class="btn" id="mobShow">Show on map</button>
       </footer>
@@ -95,6 +112,7 @@
   <script src="data/victoria.js"></script>
   <script src="data/mob_images.js"></script>
   <script src="data/drops.js"></script>
+  <script src="data/rankings.js"></script>
   <script src="data/minimap_info.js" defer></script>
   <script src="js/map.js"></script>
 </body>
