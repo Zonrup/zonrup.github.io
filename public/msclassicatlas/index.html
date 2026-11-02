@@ -53,6 +53,7 @@
         <div class="ticks" id="rankTicks"><span>Best</span><span>Okay</span><span>Meh</span></div>
       </div>
       <button id="editToggle" class="btn ghost" title="Drag nodes to lay out the map (`)">Edit layout</button>
+      <button type="button" id="helpBtn" class="btn ghost" title="How to use the map">Help</button>
     </div>
   </div>
 
@@ -105,6 +106,106 @@
         <button type="button" class="btn ghost" id="mobClear">Clear</button>
         <button type="button" class="btn" id="mobShow">Show on map</button>
       </footer>
+    </div>
+  </div>
+
+  <div id="helpDialog" class="dialog-backdrop" hidden>
+    <div class="dialog card help-dialog" role="dialog" aria-modal="true" aria-labelledby="helpDialogTitle">
+      <header>
+        <h2 id="helpDialogTitle">Help</h2>
+        <button type="button" class="close" id="helpDialogClose" title="Close (Esc)">×</button>
+      </header>
+      <div id="helpBody" class="help-body">
+        <p class="help-lead">An interactive map of Victoria Island for MapleStory Classic: where every monster, item, NPC and map is, and which maps are best for farming. Here's how to do the common things.</p>
+
+        <section>
+          <h3>Find an NPC</h3>
+          <p>Try finding Anne - just type "<b>anne</b>" anywhere on the webpage (no need to click on the search box), then press <kbd>Enter</kbd>.</p>
+          <ul>
+            <li>Anne's map should be highlighted <svg class="help-ring" width="26" height="26" viewBox="0 0 26 26" aria-label="teal search ring"><circle cx="13" cy="13" r="11.5" fill="rgba(120,230,215,.3)" stroke="#7fe3d6" stroke-width="2.5"/><circle cx="13" cy="13" r="5.5" fill="#9b9b9b" stroke="#2b1a0e" stroke-width="1.5"/></svg></li>
+            <li>Click the map to open its details.</li>
+            <li>Her location should be highlighted in the minimap.
+              <img class="help-shot" src="data/help/anne-minimap.png" alt="The minimap of The Hill East of Henesys, with Anne's dot highlighted and labelled, outlined in red" width="359" height="249" loading="lazy">
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Find a monster</h3>
+          <p>Try finding Slimes - just type "<b>slime</b>" and hit enter.</p>
+          <ul>
+            <li>Every map with Slimes gets a ring, with stars for how good it is to farm: <span class="help-stars">★★★</span> best, <span class="help-stars">★★☆</span> okay, <span class="help-stars">★☆☆</span> meh.</li>
+            <li>The <b>Rankings to show</b> slider (top left) hides the weaker spots. Set it to Best to see only the top maps, or Meh to see them all.
+              <img class="help-shot" src="data/help/rankings-slider.png" alt="The Rankings to show slider set to Best, outlined in red" width="223" height="73" loading="lazy">
+            </li>
+            <li>Hover a ringed map to see which of your monsters are there and its stars.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Find an item drop</h3>
+          <p>Try finding item drops by monster. Type "<b>leather</b>" and hit enter.</p>
+          <ul>
+            <li>"leather" also matches the Leatherworking Station, so <kbd>Enter</kbd> opens <b>Find anything</b>: pick <b>Leather</b> on its Items tab.</li>
+            <li>Every map with a monster that drops it (Pigs, Boars, Lupins and more) gets a ring.</li>
+            <li>In a map's details, the monsters that drop it are highlighted with a "Drops Leather" line.</li>
+            <li>Optional: narrow down your selection by clicking on some monsters
+              <img class="help-shot" src="data/help/leather-picker.png" alt="Find anything filtered by leather, with Pig and Ribbon Pig picked and outlined in red" width="247" height="160" loading="lazy">
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Find a crafting station</h3>
+          <p>Type the craft: "<b>smithing</b>" finds the Anvil, "<b>tailoring</b>" the Sewing Machine. "<b>crafting station</b>" rings all of them.</p>
+        </section>
+
+        <section>
+          <h3>Pick several things at once</h3>
+          <p>Click the mushroom button next to the search box (or type, then <kbd>Tab</kbd> <kbd>Enter</kbd>) to open <b>Find anything</b>.</p>
+          <img class="help-shot" src="data/help/picker-button.png" alt="The search box, with the mushroom button at its right outlined in red" width="227" height="43" loading="lazy">
+          <ul>
+            <li>Pick any mix of monsters, NPCs and items from the three tabs. Everything picked is ringed on the map.</li>
+            <li>Hover a monster card to see its common drops.</li>
+            <li>If what you type matches more than one thing (like "<b>stump</b>"), <kbd>Enter</kbd> opens this dialog so you can choose.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Compare and rank farming spots</h3>
+          <p>Pick a monster or item in Find anything, then click <b>Show map rankings</b>.</p>
+          <ul>
+            <li>Each monster gets a card listing its maps as Best, Okay and Meh, with how many spawn there and their share of the map's monsters.</li>
+            <li>Disagree? Drag a map by its <b>⠿</b> handle to another spot or tier. Your rankings are saved in this browser; <b>Reset to default</b> undoes them.</li>
+            <li><b>Find</b> shows that map on the world map. <b>Return to ranking</b> brings you back.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Find maps for your level</h3>
+          <p>Set <b>Your level</b> (top left). Every map and monster is coloured by how hard it is for you: see the legend at the bottom left. Yellow is good farming.</p>
+        </section>
+
+        <section>
+          <h3>Find a map and get around</h3>
+          <p>Type a map name, like "<b>sleepywood</b>", and press <kbd>Enter</kbd>, or click any map on the world map.</p>
+          <ul>
+            <li>The panel on the right shows its level range, monsters, NPCs and minimap. Click a portal on the minimap to go to the map it leads to.</li>
+            <li>Drag to move the map; scroll or pinch to zoom. Turn <b>Hidden streets</b> and <b>Forgotten Hollow</b> on or off at the top left.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Keyboard shortcuts</h3>
+          <ul class="help-keys">
+            <li><kbd>a</kbd>–<kbd>z</kbd> Start a search from anywhere</li>
+            <li><kbd>Enter</kbd> Pick the match, or open the map</li>
+            <li><kbd>Esc</kbd> Close a panel or dialog, then clear the search</li>
+            <li><kbd>+</kbd> <kbd>-</kbd> Zoom in and out</li>
+            <li><kbd>Home</kbd> Fit the whole island</li>
+          </ul>
+        </section>
+      </div>
     </div>
   </div>
 

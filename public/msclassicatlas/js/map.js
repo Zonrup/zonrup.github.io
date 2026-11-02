@@ -285,7 +285,7 @@
     rankShow: "okay", // lowest ranking tier whose maps a monster/item search rings: "best" | "okay" | "meh"
     rankFocus: null,  // { g, m } while "Find in map" from the rankings shows one map
     edit: false,
-    mobHit: null, // { ids, maps: Set } while a monster search is highlighting maps
+    mobHit: null, // { ids, maps: Set, stars: Map(map -> 1..3) } while a monster search is highlighting maps
     npcHit: null, // { names: Set, maps: Set } while an NPC search is highlighting maps
   };
   const cam = { x: 0, y: 0, s: 1 }; // screen = world * s + (x, y)
@@ -1188,6 +1188,8 @@
     // One pulsing teal ring on every map a search selects (monsters, items or NPCs).
     const mobHit = !!state.mobHit && state.mobHit.maps.has(m);
     const npcHit = !!state.npcHit && state.npcHit.maps.has(m);
+    const stars = mobHit ? state.mobHit.stars?.get(m) || 0 : 0;
+    const ring = stars ? { x, y, r: r + 10, stars } : null; // drawn after every node (drawRankBadges)
     if (mobHit || npcHit) {
       const pulse = (Math.sin(now / 300) + 1) / 2;
       ctx.beginPath();
@@ -1210,7 +1212,7 @@
       ctx.restore();
       ctx.strokeStyle = nodeEdge("#1c6fd1"); ctx.lineWidth = NODE_EDGE_W + 0.4;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
-      return { m, x, y: y + r + 20, priority: 0, banner: true };
+      return { m, x, y: y + r + 20, priority: 0, banner: true, ring };
     }
 
     const d = mapDiff(m);
@@ -1251,7 +1253,7 @@
     const focus = state.hover === m || state.selected === m || state.portalHover === m;
     const lr = farmRange(m);
     const lvText = lr && (cam.s >= 1.1 || focus) ? (lr.min === lr.max ? `Lv ${lr.min}` : `Lv ${lr.min}–${lr.max}`) : null;
-    return { m, x, y, r, color, lvText, focus, mobHit: mobHit || npcHit }; // either search hit gets a label
+    return { m, x, y, r, color, lvText, focus, mobHit: mobHit || npcHit, ring }; // either search hit gets a label
   }
 
   // ---------------------------------------------------------------------------
@@ -1316,7 +1318,7 @@
 
   function drawLabels(jobs) {
     const mode = state.labelMode;
-    const placed = mode === "smart" ? [...sectionMarkerBoxes(), ...hudBoxes()] : [];
+    const placed = mode === "smart" ? [...sectionMarkerBoxes(), ...hudBoxes(), ...rankBadgeBoxes(jobs)] : [];
     const nodeJobs = jobs.filter((j) => !j.banner);
     const jobOf = new Map(nodeJobs.map((j) => [j.m, j]));
     const nodeBoxes = mode === "smart" ? nodeJobs.map((j) => ({ m: j.m, cx: j.x, cy: j.y, hw: j.r + 1, hh: j.r + 1, ang: 0 })) : [];
@@ -1463,6 +1465,45 @@
     ctx.fillRect(0, 0, W, H);
   }
 
+  // Ranking stars on search rings: a small row of 3 stars (filled from the left: best 3,
+  // okay 2, meh 1) overlapping the ring's top-right, on top of every node.
+  function starPath(cx, cy, R) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? R * 0.45 : R;
+      if (i) ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); else ctx.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+  }
+  const BADGE_R = 5.2, BADGE_GAP = 10.5; // star radius and spacing, px
+  const badgeCentre = ({ x, y, r }) => [x + r * 0.72 + BADGE_GAP, y - r * 0.72]; // the middle star
+  // Screen boxes of the badges, so smart labels keep off them.
+  const rankBadgeBoxes = (jobs) => jobs.filter((j) => j.ring).map((j) => {
+    const [cx, cy] = badgeCentre(j.ring);
+    return { cx, cy, hw: BADGE_GAP + BADGE_R + 3, hh: BADGE_R + 3, ang: 0 };
+  });
+  function drawRankBadges(jobs) {
+    const R = BADGE_R, gap = BADGE_GAP;
+    for (const j of jobs) {
+      if (!j.ring) continue;
+      const { stars } = j.ring;
+      const [cx, cy] = badgeCentre(j.ring);
+      // Dark pill behind the stars so they read on any terrain.
+      ctx.beginPath();
+      ctx.roundRect(cx - gap - R - 3, cy - R - 3, 2 * (gap + R + 3), 2 * (R + 3), R + 3);
+      ctx.fillStyle = "rgba(40,26,12,.78)";
+      ctx.fill();
+      for (let i = 0; i < 3; i++) {
+        starPath(cx + (i - 1) * gap, cy + 0.4, R);
+        ctx.lineJoin = "round";
+        if (i < stars) { ctx.fillStyle = "#f2b01e"; ctx.fill(); ctx.strokeStyle = "#a8740a"; }
+        else ctx.strokeStyle = "#cbb998";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    }
+  }
+
   let needsDraw = true;
   let anim = null; // camera animation
 
@@ -1487,6 +1528,7 @@
       const list = maps.filter(isVisible).sort((p, q) => (p.type === "town") - (q.type === "town") || p.y - q.y);
       const jobs = [];
       for (const m of list) { const j = drawNode(m, now); if (j) jobs.push(j); }
+      drawRankBadges(jobs);
       drawLabels(jobs);
       drawSectionMarkers();
       drawClouds();
@@ -1651,6 +1693,7 @@
   }, { passive: false });
 
   window.addEventListener("keydown", (ev) => {
+    if (!helpDialog.hidden) { if (ev.key === "Escape") closeHelp(); return; } // the map ignores keys under Help
     if (ev.target.matches?.("input")) { if (ev.key === "Escape") ev.target.blur(); return; }
     // Letters, digits and space start a search in the HUD box (the first key replaces any
     // old query); while the picker dialog is open they go to its filter instead.
@@ -1811,7 +1854,9 @@
         const name = mob.meowdbId
           ? `<a href="https://meowdb.com/msclassic/monsters/${mob.meowdbId}" target="_blank" rel="noopener">${esc(mob.name)}</a>`
           : esc(mob.name);
+        const img = MOB_IMAGES[mob.id];
         h += `<li data-mob-name="${esc(mob.name)}"><span class="chip" style="background:${DIFF[md].color}"></span>
+          <span class="mob-sprite">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
           <span class="mob-name">${name}${mob.boss ? '<span class="boss-tag">BOSS</span>' : ""}${stats ? `<br><span class="stats">${stats}</span>` : ""}<span class="sel-drops" hidden></span></span>
           <span class="lv">Lv ${mob.level}</span><span class="why">${DIFF[md].label}</span></li>`;
       }
@@ -2349,6 +2394,19 @@
   // Maps that a list of monster groups rings. A monster inside a building rings the
   // building's host (buildings aren't drawn).
   const ringMaps = (groups) => new Set(groups.flatMap((g) => [...g.maps].map((m) => hostOf.get(m) || m)));
+  // Map -> its best ranking stars among these monsters (3 best .. 1 meh), for the stars
+  // drawn on its ring. Unranked (Forgotten Hollow) maps get none.
+  function ringStars(groups) {
+    const out = new Map();
+    for (const g of groups) {
+      for (const m of g.maps) {
+        if (!rankable(m) || !rankPasses(g, m)) continue;
+        const h = hostOf.get(m) || m, n = 3 - rankingOf(g).tierOf.get(m);
+        if (n > (out.get(h) || 0)) out.set(h, n);
+      }
+    }
+    return out;
+  }
   // The same, keeping only maps that pass the "Rankings to show" slider for that monster.
   const rankedRingMaps = (groups) => new Set(groups.flatMap((g) => [...g.maps].filter((m) => rankPasses(g, m)).map((m) => hostOf.get(m) || m)));
 
@@ -2359,7 +2417,8 @@
     // "Find in map" from the rankings: ring only that map, for that monster.
     if (state.rankFocus) {
       const { g, m } = state.rankFocus;
-      state.mobHit = { ids: g.ids, maps: new Set([hostOf.get(m) || m]) };
+      const host = hostOf.get(m) || m;
+      state.mobHit = { ids: g.ids, maps: new Set([host]), stars: rankable(m) ? new Map([[host, 3 - rankingOf(g).tierOf.get(m)]]) : new Map() };
       state.npcHit = null;
       state.sel = { mobs: new Set([g.name]), items: [], npcs: new Set() };
       paintNpcs(); paintMobs();
@@ -2375,7 +2434,7 @@
     const pickedNpcGs = [...pickedNpcs].map(npcGroupByName).filter(Boolean);
     const fromPicks = pickCount() ? [...picked, ...pickedItemGs.flatMap((it) => it.mobs)] : previewNames;
     const groups = [...new Set([...fromTyping, ...fromPicks])].map((n) => groupByName.get(n)).filter(Boolean);
-    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: rankedRingMaps(groups) } : null;
+    state.mobHit = groups.length ? { ids: groups.flatMap((g) => g.ids), maps: rankedRingMaps(groups), stars: ringStars(groups) } : null;
     const typedMaps = rankedRingMaps(fromTyping.map((n) => groupByName.get(n)).filter(Boolean)).size;
     const pickedMobGroups = [...new Set([...picked, ...pickedItemGs.flatMap((it) => it.mobs)])].map((n) => groupByName.get(n)).filter(Boolean);
     const pickedMaps = new Set([...rankedRingMaps(pickedMobGroups), ...pickedNpcGs.flatMap((g) => [...g.maps])]).size;
@@ -2913,6 +2972,15 @@
   // ---------------------------------------------------------------------------
   // Edit mode
   // ---------------------------------------------------------------------------
+  // Help: a near-full-screen dialog from the HUD's Help button. × , Esc or a click outside
+  // closes it. (Content still to be written; see the TODO in README.md.)
+  const helpDialog = document.getElementById("helpDialog"), helpBtn = document.getElementById("helpBtn");
+  function openHelp() { helpDialog.hidden = false; document.getElementById("helpDialogClose").focus(); }
+  function closeHelp() { helpDialog.hidden = true; helpBtn.focus(); }
+  helpBtn.addEventListener("click", openHelp);
+  document.getElementById("helpDialogClose").addEventListener("click", closeHelp);
+  helpDialog.addEventListener("click", (ev) => { if (ev.target === helpDialog) closeHelp(); });
+
   const editToggle = document.getElementById("editToggle");
   function setEdit(on) {
     state.edit = on;
