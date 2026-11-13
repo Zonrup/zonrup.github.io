@@ -1976,6 +1976,7 @@
     add(m, null);
     if (!inSub) for (const b of buildingsOf.get(m) || []) add(b, b);
     if (!rows.length) return "";
+    rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
     let h = `<section><h3>NPCs (${rows.length})</h3><div class="links">`;
     for (const r of rows) {
       h += `<button class="link-btn npc-row" data-npc="${esc(r.key)}" data-npc-name="${esc(r.name)}"${r.bld ? ` data-bld="${esc(r.bld.mapId)}"` : ""}>
@@ -2358,16 +2359,29 @@
     return (npcGroups = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)));
   }
 
-  // Monster, item and NPC names and maps whose names start with q (maps also ignoring a
-  // leading "The"; crafting stations also by craft name).
+  // True if lowercase q starts any word of name: "pick" finds "Mr. Pickall", "admin" finds
+  // "Maple Administrator", "henesys" finds "Community Board (Henesys)". Words break on spaces,
+  // and a word's leading "(" or "-" is skipped.
+  function wordPrefix(name, q) {
+    const n = name.toLowerCase();
+    for (let i = 0; i < n.length; i++) {
+      if (i > 0 && !/[\s(\-]/.test(n[i - 1])) continue;
+      if (/[\s(\-]/.test(n[i])) continue;
+      if (n.startsWith(q, i)) return true;
+    }
+    return false;
+  }
+
+  // Monster, item, NPC and map names with a word starting with q (crafting stations also
+  // by craft name).
   function prefixMatches(raw) {
     const q = raw.trim().toLowerCase();
     if (q.length < SEARCH_MIN_CHARS) return { q, mobs: [], npcs: [], items: [], maps: [] };
-    const starts = (g) => g.name.toLowerCase().startsWith(q);
+    const starts = (g) => wordPrefix(g.name, q);
     return {
       q,
       mobs: mobGroups.filter(starts).map((g) => g.name),
-      npcs: getNpcGroups().filter((g) => g.keys.some((k) => k.startsWith(q))).map((g) => g.name),
+      npcs: getNpcGroups().filter((g) => g.keys.some((k) => wordPrefix(k, q))).map((g) => g.name),
       items: itemGroups.filter(starts).map((it) => it.name),
       maps: mapMatches(q),
     };
@@ -2391,8 +2405,10 @@
   const npcGroupByName = (name) => getNpcGroups().find((g) => g.name === name);
   function mapMatches(q) {
     if (q.length < SEARCH_MIN_CHARS) return [];
-    return maps.filter((x) => { const n = x.name.toLowerCase(); return n.startsWith(q) || n.replace(/^the /, "").startsWith(q); })
-      .sort((a, b) => a.name.length - b.name.length);
+    // Names that start with q (or with "The q") come first, then shortest first.
+    const lead = (x) => { const n = x.name.toLowerCase(); return n.startsWith(q) || n.replace(/^the /, "").startsWith(q) ? 0 : 1; };
+    return maps.filter((x) => wordPrefix(x.name, q))
+      .sort((a, b) => lead(a) - lead(b) || a.name.length - b.name.length);
   }
 
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -2554,7 +2570,7 @@
     mapChips.innerHTML = mm.length ? `<span class="chip-label">Maps:</span>` + mm.slice(0, 8).map((m) => `<button type="button" data-map="${esc(m.id)}">${esc(m.name)}</button>`).join("") : "";
 
     // Preview on the map while nothing is picked.
-    const pre = q.length >= SEARCH_MIN_CHARS ? mobGroups.filter((g) => g.name.toLowerCase().startsWith(q)) : [];
+    const pre = q.length >= SEARCH_MIN_CHARS ? mobGroups.filter((g) => wordPrefix(g.name, q)) : [];
     previewNames = pre.length && pre.length <= SEARCH_MAX_MOBS ? pre.map((g) => g.name) : [];
     updateHighlight();
   }
@@ -2629,11 +2645,18 @@
   search.addEventListener("input", () => { typed = prefixMatches(search.value); updateHighlight(); });
   // The one monster, item or NPC the typing names, as [kind, name], or null. A single
   // monster also wins when every matching item is dropped only by it ("green mushroom":
-  // the Green Mushroom, not also its Green Mushroom Cap).
+  // the Green Mushroom, not also its Green Mushroom Cap). Typing a full name also ignores
+  // matches on a later word: "mushroom spore" picks Mushroom Spore, not also Glowing
+  // Mushroom Spore (but "stump" still matches Stumpy too).
   function uniqueTyped(t) {
     const all = [...t.mobs.map((n) => ["mobs", n]), ...t.items.map((n) => ["items", n]), ...t.npcs.map((n) => ["npcs", n])];
     if (all.length === 1) return all[0];
     if (t.mobs.length === 1 && !t.npcs.length && t.items.every((n) => { const ms = itemByName.get(n)?.mobs || []; return ms.length === 1 && ms[0] === t.mobs[0]; })) return ["mobs", t.mobs[0]];
+    if (all.some(([, n]) => n.toLowerCase() === t.q)) {
+      const lead = (ns) => ns.filter((n) => n.toLowerCase().startsWith(t.q));
+      const narrowed = { q: t.q, mobs: lead(t.mobs), items: lead(t.items), npcs: lead(t.npcs) };
+      if (narrowed.mobs.length + narrowed.items.length + narrowed.npcs.length < all.length) return uniqueTyped(narrowed);
+    }
     return null;
   }
 
