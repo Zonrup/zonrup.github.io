@@ -5,7 +5,7 @@ window.WORLD_DATA = {
   "name": "Victoria Island",
   "status": "meowdb",
   "source": "https://meowdb.com/msclassic",
-  "crawledAt": "2026-10-31T00:47:25.054Z",
+  "crawledAt": "2026-11-19T09:35:21.085051+00:00",
   "scale": 6
  },
  "regions": {
@@ -75,7 +75,7 @@ window.WORLD_DATA = {
    "hp": 68,
    "exp": 8,
    "def": 0,
-   "mdef": 30,
+   "mdef": 15,
    "acc": 45,
    "meowdbId": 5
   },
@@ -97,7 +97,7 @@ window.WORLD_DATA = {
    "hp": 115,
    "exp": 12,
    "def": 10,
-   "mdef": 20,
+   "mdef": 5,
    "acc": 53,
    "meowdbId": 7
   },
@@ -154,7 +154,7 @@ window.WORLD_DATA = {
    "hp": 191,
    "exp": 23,
    "def": 0,
-   "mdef": 30,
+   "mdef": 15,
    "acc": 69,
    "avoid": 7,
    "meowdbId": 12
@@ -166,7 +166,7 @@ window.WORLD_DATA = {
    "hp": 233,
    "exp": 26,
    "def": 0,
-   "mdef": 30,
+   "mdef": 20,
    "acc": 79,
    "avoid": 8,
    "meowdbId": 13
@@ -202,7 +202,7 @@ window.WORLD_DATA = {
    "hp": 342,
    "exp": 35,
    "def": 10,
-   "mdef": 20,
+   "mdef": 10,
    "acc": 85,
    "avoid": 11,
    "meowdbId": 16
@@ -238,8 +238,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 20,
    "hp": 296,
    "exp": 37,
-   "def": 0,
-   "mdef": 30,
+   "def": 5,
+   "mdef": 15,
    "acc": 99,
    "avoid": 13,
    "meowdbId": 17
@@ -250,8 +250,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 21,
    "hp": 272,
    "exp": 39,
-   "def": 0,
-   "mdef": 30,
+   "def": 15,
+   "mdef": 5,
    "acc": 102,
    "avoid": 14,
    "meowdbId": 18
@@ -310,8 +310,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 24,
    "hp": 436,
    "exp": 45,
-   "def": 15,
-   "mdef": 15,
+   "def": 10,
+   "mdef": 20,
    "acc": 99,
    "avoid": 14,
    "meowdbId": 21
@@ -322,8 +322,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 25,
    "hp": 510,
    "exp": 46,
-   "def": 15,
-   "mdef": 15,
+   "def": 20,
+   "mdef": 10,
    "acc": 101,
    "avoid": 15,
    "meowdbId": 22
@@ -430,8 +430,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 33,
    "hp": 1001,
    "exp": 63,
-   "def": 30,
-   "mdef": 0,
+   "def": 20,
+   "mdef": 10,
    "acc": 112,
    "avoid": 22,
    "meowdbId": 31
@@ -491,8 +491,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 37,
    "hp": 1336,
    "exp": 75,
-   "def": 0,
-   "mdef": 30,
+   "def": 5,
+   "mdef": 20,
    "acc": 116,
    "avoid": 27,
    "meowdbId": 35
@@ -503,8 +503,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 38,
    "hp": 1714,
    "exp": 78,
-   "def": 0,
-   "mdef": 30,
+   "def": 20,
+   "mdef": 10,
    "acc": 116,
    "avoid": 24,
    "meowdbId": 36
@@ -515,8 +515,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 39,
    "hp": 1377,
    "exp": 82,
-   "def": 10,
-   "mdef": 10,
+   "def": 15,
+   "mdef": 5,
    "acc": 118,
    "avoid": 25,
    "meowdbId": 54
@@ -527,8 +527,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 40,
    "hp": 1894,
    "exp": 85,
-   "def": 0,
-   "mdef": 30,
+   "def": 10,
+   "mdef": 20,
    "acc": 120,
    "avoid": 25,
    "meowdbId": 37
@@ -552,8 +552,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 40,
    "hp": 1722,
    "exp": 85,
-   "def": 10,
-   "mdef": 0,
+   "def": 20,
+   "mdef": 10,
    "acc": 120,
    "avoid": 25,
    "meowdbId": 55
@@ -564,8 +564,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 41,
    "hp": 1774,
    "exp": 89,
-   "def": 0,
-   "mdef": 30,
+   "def": 5,
+   "mdef": 20,
    "acc": 121,
    "avoid": 29,
    "meowdbId": 38
@@ -576,8 +576,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 42,
    "hp": 1278,
    "exp": 93,
-   "def": 0,
-   "mdef": 0,
+   "def": 15,
+   "mdef": 15,
    "acc": 133,
    "avoid": 29,
    "meowdbId": 56
@@ -588,8 +588,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 43,
    "hp": 2069,
    "exp": 98,
-   "def": 0,
-   "mdef": 20,
+   "def": 20,
+   "mdef": 10,
    "acc": 123,
    "avoid": 27,
    "meowdbId": 57
@@ -697,8 +697,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 49,
    "hp": 2657,
    "exp": 127,
-   "def": 15,
-   "mdef": 15,
+   "def": 20,
+   "mdef": 10,
    "acc": 128,
    "avoid": 30,
    "meowdbId": 44
@@ -721,7 +721,7 @@ window.WORLD_DATA = {
    "effectiveLevel": 50,
    "hp": 2682,
    "exp": 133,
-   "def": 0,
+   "def": 10,
    "mdef": 20,
    "acc": 129,
    "avoid": 30,
@@ -745,8 +745,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 54,
    "hp": 3924,
    "exp": 160,
-   "def": 10,
-   "mdef": 0,
+   "def": 20,
+   "mdef": 10,
    "acc": 118,
    "avoid": 29,
    "meowdbId": 61
@@ -757,8 +757,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 55,
    "hp": 2998,
    "exp": 167,
-   "def": 0,
-   "mdef": 50,
+   "def": 5,
+   "mdef": 20,
    "acc": 146,
    "avoid": 33,
    "meowdbId": 47
@@ -783,7 +783,7 @@ window.WORLD_DATA = {
    "hp": 3520,
    "exp": 183,
    "def": 20,
-   "mdef": 10,
+   "mdef": 5,
    "acc": 134,
    "avoid": 34,
    "meowdbId": 62
@@ -794,8 +794,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 56,
    "hp": 5134,
    "exp": 175,
-   "def": 30,
-   "mdef": 0,
+   "def": 25,
+   "mdef": 5,
    "acc": 120,
    "avoid": 30,
    "meowdbId": 48
@@ -818,8 +818,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 58,
    "hp": 5428,
    "exp": 192,
-   "def": 0,
-   "mdef": 30,
+   "def": 5,
+   "mdef": 25,
    "acc": 121,
    "avoid": 31,
    "meowdbId": 49
@@ -830,8 +830,8 @@ window.WORLD_DATA = {
    "effectiveLevel": 59,
    "hp": 4834,
    "exp": 201,
-   "def": 0,
-   "mdef": 0,
+   "def": 20,
+   "mdef": 10,
    "acc": 122,
    "avoid": 32,
    "meowdbId": 63
@@ -4260,16 +4260,24 @@ window.WORLD_DATA = {
      "count": 31
     }
    ],
-   "links": [],
+   "links": [
+    "the_hermit_s_cabin"
+   ],
    "verified": true,
-   "pinned": true,
-   "exits": [
-    {
-     "mapId": "010003098",
-     "name": "010003098",
-     "region": "?"
-    }
-   ]
+   "pinned": true
+  },
+  {
+   "id": "the_hermit_s_cabin",
+   "name": "The Hermit's Cabin",
+   "mapId": "010003098",
+   "region": "victoria_island_dungeon",
+   "type": "hidden",
+   "street": "Hidden Street",
+   "x": 1190,
+   "y": 1537,
+   "mobs": [],
+   "links": [],
+   "verified": true
   },
   {
    "id": "the_murky_swamp_i",
@@ -5545,13 +5553,14 @@ window.WORLD_DATA = {
     "excavation_site_ii"
    ],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "excavation_site_ii",
    "name": "Excavation Site II",
    "mapId": "010004131",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2152,
@@ -5574,13 +5583,14 @@ window.WORLD_DATA = {
     "excavation_site_iii"
    ],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "excavation_site_iii",
    "name": "Excavation Site III",
    "mapId": "010004132",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2218,
@@ -5599,13 +5609,14 @@ window.WORLD_DATA = {
     "excavation_site_camp"
    ],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "excavation_site_camp",
    "name": "Excavation Site <Camp>",
    "mapId": "010004133",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "safe",
    "street": "Victoria Road",
    "x": 2316,
@@ -5615,13 +5626,14 @@ window.WORLD_DATA = {
     "remains_tomb_i"
    ],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "remains_tomb_i",
    "name": "Remains <Tomb> I",
    "mapId": "010004134",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2397,
@@ -5640,13 +5652,14 @@ window.WORLD_DATA = {
     "remains_tomb_ii"
    ],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "remains_tomb_ii",
    "name": "Remains <Tomb> II",
    "mapId": "010004135",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2511,
@@ -5670,13 +5683,14 @@ window.WORLD_DATA = {
     "remains_tomb_iii"
    ],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "remains_tomb_iii",
    "name": "Remains <Tomb> III",
    "mapId": "010004136",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2590,
@@ -5700,13 +5714,14 @@ window.WORLD_DATA = {
     "remains_tomb_iv"
    ],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "remains_tomb_iv",
    "name": "Remains <Tomb> IV",
    "mapId": "010004137",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2613,
@@ -5726,13 +5741,14 @@ window.WORLD_DATA = {
     "remains_cliff"
    ],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "remains_cliff",
    "name": "Remains <Cliff>",
    "mapId": "010004138",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2634,
@@ -5749,13 +5765,14 @@ window.WORLD_DATA = {
    ],
    "links": [],
    "verified": true,
-   "pinned": true
+   "pinned": true,
+   "worldMapDot": true
   },
   {
    "id": "camp_1",
    "name": "Camp 1",
    "mapId": "010004140",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2406,
@@ -5778,7 +5795,7 @@ window.WORLD_DATA = {
    "id": "camp_2",
    "name": "Camp 2",
    "mapId": "010004141",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2482,
@@ -5801,7 +5818,7 @@ window.WORLD_DATA = {
    "id": "camp_3",
    "name": "Camp 3",
    "mapId": "010004142",
-   "region": "forgotten_hollow",
+   "region": "ellinia",
    "type": "field",
    "street": "Victoria Road",
    "x": 2521,
@@ -7054,10 +7071,11 @@ window.WORLD_DATA = {
    "y": 3975,
    "mobs": [],
    "links": [
-    "cave_fairy_department_store",
     "cave_fairy_sanctuary",
+    "cave_fairy_store",
     "primeval_forest_i",
-    "the_end_of_fleeting_light"
+    "the_end_of_fleeting_light",
+    "the_faded_threshold"
    ],
    "verified": true,
    "layer": "underground",
@@ -7072,7 +7090,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "building",
    "street": "Shallow Passage",
-   "x": 924,
+   "x": 674,
    "y": 4100,
    "mobs": [],
    "links": [],
@@ -7082,14 +7100,30 @@ window.WORLD_DATA = {
    "section": "forgotten_hollow"
   },
   {
-   "id": "cave_fairy_department_store",
-   "name": "Cave Fairy Department Store",
+   "id": "cave_fairy_store",
+   "name": "Cave Fairy Store",
    "mapId": "010006002",
    "region": "forgotten_hollow",
    "type": "building",
    "street": "Shallow Passage",
-   "x": 924,
+   "x": 674,
    "y": 4225,
+   "mobs": [],
+   "links": [],
+   "verified": true,
+   "layer": "underground",
+   "area": "forgotten_hollow",
+   "section": "forgotten_hollow"
+  },
+  {
+   "id": "the_faded_threshold",
+   "name": "The Faded Threshold",
+   "mapId": "010006003",
+   "region": "forgotten_hollow",
+   "type": "building",
+   "street": "Shallow Passage",
+   "x": 674,
+   "y": 4350,
    "mobs": [],
    "links": [],
    "verified": true,
@@ -7104,12 +7138,12 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 674,
+   "x": 924,
    "y": 3975,
    "mobs": [
     {
      "id": "m54",
-     "count": 5
+     "count": 8
     },
     {
      "id": "m57",
@@ -7135,16 +7169,16 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 548,
+   "x": 1048,
    "y": 3850,
    "mobs": [
     {
      "id": "m56",
-     "count": 2
+     "count": 6
     },
     {
      "id": "m57",
-     "count": 8
+     "count": 4
     },
     {
      "id": "m58",
@@ -7152,7 +7186,7 @@ window.WORLD_DATA = {
     }
    ],
    "links": [
-    "collision_of_ice_and_fire",
+    "hanging_gardens_of_rot",
     "primeval_forest_iii"
    ],
    "verified": true,
@@ -7161,26 +7195,26 @@ window.WORLD_DATA = {
    "section": "forgotten_hollow"
   },
   {
-   "id": "collision_of_ice_and_fire",
-   "name": "Collision of Ice and Fire",
+   "id": "hanging_gardens_of_rot",
+   "name": "Hanging Gardens of Rot",
    "mapId": "010006022",
    "region": "forgotten_hollow",
    "type": "hidden",
    "street": "Hidden Street",
-   "x": 674,
+   "x": 924,
    "y": 3850,
    "mobs": [
     {
      "id": "m54",
-     "count": 11
+     "count": 21
     },
     {
      "id": "m57",
-     "count": 15
+     "count": 29
     },
     {
      "id": "m59",
-     "count": 7
+     "count": 19
     }
    ],
    "links": [
@@ -7197,7 +7231,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 424,
+   "x": 1174,
    "y": 3850,
    "mobs": [
     {
@@ -7225,16 +7259,20 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "hidden",
    "street": "Hidden Street",
-   "x": 548,
+   "x": 1048,
    "y": 3725,
    "mobs": [
     {
      "id": "m21",
-     "count": 8
+     "count": 6
+    },
+    {
+     "id": "m33",
+     "count": 3
     },
     {
      "id": "m38",
-     "count": 8
+     "count": 7
     },
     {
      "id": "m59",
@@ -7253,20 +7291,20 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 298,
+   "x": 1298,
    "y": 3850,
    "mobs": [
     {
      "id": "m55",
-     "count": 12
+     "count": 10
     },
     {
      "id": "m56",
-     "count": 2
+     "count": 6
     },
     {
      "id": "m57",
-     "count": 9
+     "count": 11
     }
    ],
    "links": [
@@ -7284,16 +7322,16 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 174,
+   "x": 1424,
    "y": 3850,
    "mobs": [
     {
      "id": "m35",
-     "count": 8
+     "count": 6
     },
     {
      "id": "m54",
-     "count": 13
+     "count": 12
     },
     {
      "id": "m55",
@@ -7315,7 +7353,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 48,
+   "x": 1548,
    "y": 3850,
    "mobs": [
     {
@@ -7344,20 +7382,24 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 924,
+   "x": 674,
    "y": 3975,
    "mobs": [
     {
+     "id": "m54",
+     "count": 1
+    },
+    {
      "id": "m57",
-     "count": 9
+     "count": 6
     },
     {
      "id": "m59",
-     "count": 11
+     "count": 12
     },
     {
      "id": "m60",
-     "count": 7
+     "count": 6
     }
    ],
    "links": [
@@ -7407,20 +7449,20 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 924,
+   "x": 674,
    "y": 3850,
    "mobs": [
     {
      "id": "m54",
-     "count": 10
+     "count": 11
     },
     {
      "id": "m55",
-     "count": 8
+     "count": 12
     },
     {
      "id": "m58",
-     "count": 7
+     "count": 12
     }
    ],
    "links": [],
@@ -7436,7 +7478,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Shallow Passage",
-   "x": 1048,
+   "x": 548,
    "y": 3975,
    "mobs": [
     {
@@ -7471,7 +7513,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 1174,
+   "x": 424,
    "y": 3975,
    "mobs": [
     {
@@ -7479,8 +7521,12 @@ window.WORLD_DATA = {
      "count": 7
     },
     {
+     "id": "m34",
+     "count": 3
+    },
+    {
      "id": "m58",
-     "count": 11
+     "count": 13
     }
    ],
    "links": [
@@ -7498,12 +7544,16 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 1298,
+   "x": 298,
    "y": 3975,
    "mobs": [
     {
      "id": "m21",
      "count": 5
+    },
+    {
+     "id": "m33",
+     "count": 2
     },
     {
      "id": "m58",
@@ -7529,7 +7579,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 1424,
+   "x": 174,
    "y": 3975,
    "mobs": [
     {
@@ -7556,7 +7606,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 1548,
+   "x": 48,
    "y": 3975,
    "mobs": [
     {
@@ -7584,7 +7634,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "hidden",
    "street": "Hidden Street",
-   "x": 1674,
+   "x": -76,
    "y": 4100,
    "mobs": [
     {
@@ -7605,8 +7655,23 @@ window.WORLD_DATA = {
     }
    ],
    "links": [
-    "bygone_days"
+    "rotten_house"
    ],
+   "verified": true,
+   "area": "forgotten_hollow",
+   "section": "forgotten_hollow"
+  },
+  {
+   "id": "rotten_house",
+   "name": "Rotten House",
+   "mapId": "010006122",
+   "region": "forgotten_hollow",
+   "type": "building",
+   "street": "Hidden Street",
+   "x": -202,
+   "y": 4100,
+   "mobs": [],
+   "links": [],
    "verified": true,
    "area": "forgotten_hollow",
    "section": "forgotten_hollow"
@@ -7618,9 +7683,13 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 1674,
+   "x": -76,
    "y": 3975,
    "mobs": [
+    {
+     "id": "m34",
+     "count": 2
+    },
     {
      "id": "m38",
      "count": 7
@@ -7649,20 +7718,20 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 1798,
+   "x": -202,
    "y": 3975,
    "mobs": [
     {
      "id": "m56",
-     "count": 2
+     "count": 3
     },
     {
      "id": "m59",
-     "count": 7
+     "count": 10
     },
     {
      "id": "m61",
-     "count": 6
+     "count": 5
     }
    ],
    "links": [
@@ -7680,23 +7749,24 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 1924,
+   "x": -326,
    "y": 3975,
    "mobs": [
     {
      "id": "m28",
-     "count": 3
+     "count": 5
     },
     {
      "id": "m58",
-     "count": 7
+     "count": 16
     },
     {
      "id": "m61",
-     "count": 9
+     "count": 21
     }
    ],
    "links": [
+    "bygone_days",
     "precipice_of_darkness"
    ],
    "verified": true,
@@ -7711,7 +7781,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "building",
    "street": "Deep Passage",
-   "x": 1798,
+   "x": -452,
    "y": 4100,
    "mobs": [],
    "links": [],
@@ -7727,24 +7797,24 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 2048,
+   "x": -452,
    "y": 3975,
    "mobs": [
     {
      "id": "m38",
-     "count": 5
+     "count": 7
     },
     {
      "id": "m60",
-     "count": 14
+     "count": 9
     },
     {
      "id": "m62",
-     "count": 6
+     "count": 15
     },
     {
      "id": "m800011",
-     "count": 2
+     "count": 6
     }
    ],
    "links": [
@@ -7762,7 +7832,7 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 2174,
+   "x": -576,
    "y": 3975,
    "mobs": [
     {
@@ -7771,11 +7841,11 @@ window.WORLD_DATA = {
     },
     {
      "id": "m62",
-     "count": 14
+     "count": 13
     },
     {
      "id": "m63",
-     "count": 3
+     "count": 8
     }
    ],
    "links": [
@@ -7793,16 +7863,20 @@ window.WORLD_DATA = {
    "region": "forgotten_hollow",
    "type": "dungeon",
    "street": "Deep Passage",
-   "x": 2298,
+   "x": -702,
    "y": 3975,
    "mobs": [
     {
-     "id": "m56",
+     "id": "m33",
      "count": 3
     },
     {
+     "id": "m56",
+     "count": 2
+    },
+    {
      "id": "m62",
-     "count": 10
+     "count": 15
     },
     {
      "id": "m63",
@@ -8002,7 +8076,7 @@ window.WORLD_DATA = {
    "name": "Forgotten Hollow",
    "root": "the_tree_tunnel_at_the_forest_up_north",
    "entry": {
-    "x": -76,
+    "x": 1674,
     "y": 3850
    },
    "label": "Tree Tunnel (Ellinia)",

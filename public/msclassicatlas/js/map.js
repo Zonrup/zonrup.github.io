@@ -287,7 +287,6 @@
     portalHover: null, // map whose minimap portal pin is under the mouse (ringed on the map)
     showHidden: true,
     labelMode: "smart", // "none" | "smart" | "all"
-    showForgottenHollow: false,
     rankShow: "okay", // lowest ranking tier whose maps a monster/item search rings: "best" | "okay" | "meh"
     rankFocus: null,  // { g, m } while "Find in map" from the rankings shows one map
     edit: false,
@@ -303,7 +302,6 @@
     if (typeof saved.showHidden === "boolean") state.showHidden = saved.showHidden;
     if (["none", "smart", "all"].includes(saved.labelMode)) state.labelMode = saved.labelMode;
     else if (saved.showLabels === true) state.labelMode = "all"; // old "Always show labels"
-    if (typeof saved.showForgottenHollow === "boolean") state.showForgottenHollow = saved.showForgottenHollow;
     if (["best", "okay", "meh"].includes(saved.rankShow)) state.rankShow = saved.rankShow;
   } catch (_) { /* storage unavailable */ }
 
@@ -311,17 +309,14 @@
     try {
       localStorage.setItem("wm-prefs", JSON.stringify({
         level: state.level, showHidden: state.showHidden, labelMode: state.labelMode,
-        showForgottenHollow: state.showForgottenHollow, rankShow: state.rankShow,
+        rankShow: state.rankShow,
       }));
     } catch (_) { /* ignore */ }
   }
 
   function isVisible(m) {
-    // "Find in map" from the rankings shows hidden streets and Forgotten Hollow without
-    // changing the checkboxes.
-    const force = !!state.rankFocus;
-    if (m.area === "forgotten_hollow" && !state.showForgottenHollow && !force) return false;
-    if (m.type === "hidden") return state.showHidden || force;
+    // "Find in map" from the rankings shows hidden streets without changing the checkbox.
+    if (m.type === "hidden") return state.showHidden || !!state.rankFocus;
     if (hostOf.has(m)) return false; // buildings live in their host's panel, not on the map
     return true;
   }
@@ -420,7 +415,7 @@
     return m;
   }
 
-  // A section is shown when any of its maps is (Forgotten Hollow can be toggled off).
+  // A section is shown when any of its maps is.
   const sectionShown = (s) => s.members.some(isVisible);
   // Sections whose root is far from the panel get a small portal marker by the root instead
   // of a stairway; clicking it jumps to the panel.
@@ -2160,19 +2155,11 @@
     if (state.selected && !isVisible(state.selected)) select(null);
     needsDraw = true; savePrefs();
   });
-  const showForgottenHollow = document.getElementById("showForgottenHollow");
-  showForgottenHollow.checked = state.showForgottenHollow;
-  showForgottenHollow.addEventListener("change", () => {
-    state.showForgottenHollow = showForgottenHollow.checked;
-    if (state.selected && !isVisible(state.selected)) select(null);
-    needsDraw = true; savePrefs();
-  });
 
   // Turn on whatever toggles a map needs to be shown (used when jumping to it).
   function reveal(m) {
     if (m && hostOf.has(m)) m = hostOf.get(m); // a building shows through its host
     if (!m || isVisible(m)) return;
-    if (m.area === "forgotten_hollow") state.showForgottenHollow = showForgottenHollow.checked = true;
     if (m.type === "hidden") state.showHidden = showHidden.checked = true;
     needsDraw = true; savePrefs();
   }
@@ -2266,20 +2253,15 @@
   let rankEdits = {};
   try { rankEdits = JSON.parse(localStorage.getItem(RANK_KEY) || "{}") || {}; } catch (_) { /* storage unavailable */ }
   function saveRankEdits() { try { localStorage.setItem(RANK_KEY, JSON.stringify(rankEdits)); } catch (_) { /* ignore */ } }
-  // Forgotten Hollow isn't released yet, so its maps aren't ranked: they're left out of the
-  // rankings view and the downloaded file, and the "Rankings to show" slider doesn't hide
-  // them (the Forgotten Hollow checkbox still does). Keep in step with tools/build_rankings.py.
-  const RANK_FORGOTTEN_HOLLOW = false;
-  const rankable = (m) => RANK_FORGOTTEN_HOLLOW || m.area !== "forgotten_hollow";
   function resolveRanking(g, src = {}) {
     const out = { best: [], okay: [], meh: [] }, seen = new Set();
     for (const t of RANK_TIERS) {
       for (const id of src[t] || []) {
         const m = byId.get(id);
-        if (m && g.maps.has(m) && rankable(m) && !seen.has(m)) { seen.add(m); out[t].push(m); }
+        if (m && g.maps.has(m) && !seen.has(m)) { seen.add(m); out[t].push(m); }
       }
     }
-    out.meh.push(...[...g.maps].filter((m) => rankable(m) && !seen.has(m)).sort((a, b) => a.name.localeCompare(b.name)));
+    out.meh.push(...[...g.maps].filter((m) => !seen.has(m)).sort((a, b) => a.name.localeCompare(b.name)));
     out.tierOf = new Map(RANK_TIERS.flatMap((t, i) => out[t].map((m) => [m, i])));
     return out;
   }
@@ -2304,13 +2286,13 @@
     updateHighlight();
   }
   // Does map m pass the "Rankings to show" slider for monster group g?
-  const rankPasses = (g, m) => !rankable(m) || (rankingOf(g).tierOf.get(m) ?? 2) <= RANK_TIERS.indexOf(state.rankShow);
+  const rankPasses = (g, m) => (rankingOf(g).tierOf.get(m) ?? 2) <= RANK_TIERS.indexOf(state.rankShow);
   // Every monster's ranking (edited or default) as a data/rankings.js file.
   function rankingsFileText() {
     const all = {};
     for (const g of [...mobGroups].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
       const r = rankingOf(g);
-      if (r.tierOf.size) all[g.name] = rankIds(r); // monsters only in unranked areas have none
+      if (r.tierOf.size) all[g.name] = rankIds(r);
     }
     return "// Default farming-spot rankings: monster name -> map ids per tier, best first.\n"
       + "// Generated by tools/build_rankings.py; can be replaced by the page's \"Download all rankings\".\n"
@@ -2418,12 +2400,12 @@
   // building's host (buildings aren't drawn).
   const ringMaps = (groups) => new Set(groups.flatMap((g) => [...g.maps].map((m) => hostOf.get(m) || m)));
   // Map -> its best ranking stars among these monsters (3 best .. 1 meh), for the stars
-  // drawn on its ring. Unranked (Forgotten Hollow) maps get none.
+  // drawn on its ring.
   function ringStars(groups) {
     const out = new Map();
     for (const g of groups) {
       for (const m of g.maps) {
-        if (!rankable(m) || !rankPasses(g, m)) continue;
+        if (!rankPasses(g, m)) continue;
         const h = hostOf.get(m) || m, n = 3 - rankingOf(g).tierOf.get(m);
         if (n > (out.get(h) || 0)) out.set(h, n);
       }
@@ -2441,7 +2423,7 @@
     if (state.rankFocus) {
       const { g, m } = state.rankFocus;
       const host = hostOf.get(m) || m;
-      state.mobHit = { ids: g.ids, maps: new Set([host]), stars: rankable(m) ? new Map([[host, 3 - rankingOf(g).tierOf.get(m)]]) : new Map() };
+      state.mobHit = { ids: g.ids, maps: new Set([host]), stars: new Map([[host, 3 - rankingOf(g).tierOf.get(m)]]) };
       state.npcHit = null;
       state.sel = { mobs: new Set([g.name]), items: [], npcs: new Set() };
       paintNpcs(); paintMobs();
@@ -2814,9 +2796,8 @@
   function rankCardHtml(g) {
     const r = rankingOf(g), d = DIFF[diffFor(g.effLevel, state.level)];
     const items = [...pickedItems].map((n) => itemByName.get(n)).filter((it) => it && it.mobs.includes(g.name));
-    const unranked = [...g.maps].filter((m) => !rankable(m)).length;
     let list = "";
-    for (const t of r.tierOf.size ? RANK_TIERS : []) {
+    for (const t of RANK_TIERS) {
       list += `<li class="rank-tier" data-tier="${t}">${starsHtml(tierStars(t))}${RANK_LABEL[t]}<span class="n">${r[t].length}</span></li>`;
       if (!r[t].length) list += `<li class="rank-empty">No maps. Drag one here</li>`;
       for (const m of r[t]) {
@@ -2833,12 +2814,10 @@
         <div class="sprite">${g.img ? `<img src="${esc(g.img)}" alt="">` : ""}</div>
         <div class="mob-name" style="color:${d.color}">${esc(g.name)}</div>
         <div class="mob-lv">Lv ${g.levels.join("/")} · ${plural(g.maps.size, "map")}</div>
-        ${unranked ? `<div class="mob-lv rk-unranked">${unranked} in Forgotten Hollow, not ranked</div>` : ""}
         ${rankEdited(g) ? `<button type="button" class="rk-reset" title="Undo your edits to this ranking">Reset to default</button>` : ""}
       </div>
       ${items.length ? `<ul class="rank-items">${items.map((it) => `<li>${it.icon ? `<img src="${esc(it.icon)}" alt="">` : ""}<span>${esc(it.name)}</span></li>`).join("")}</ul>` : ""}
-      ${r.tierOf.size ? `<ol class="rank-list">${list}</ol>`
-        : `<div class="rank-list rank-none">Only found in Forgotten Hollow, which isn't released yet, so it isn't ranked.</div>`}
+      <ol class="rank-list">${list}</ol>
     </section>`;
   }
   function renderRankCards() {
@@ -2925,8 +2904,8 @@
   rankCards.addEventListener("pointerup", endDrag);
   rankCards.addEventListener("pointercancel", endDrag);
 
-  // "Find in map": hide the dialog, show that one map (hidden streets and Forgotten Hollow
-  // forced on, without touching the checkboxes) and swap the HUD's search for a bar with
+  // "Find in map": hide the dialog, show that one map (hidden streets forced on, without
+  // touching the checkbox) and swap the HUD's search for a bar with
   // "Return to ranking" and "Exit ranking".
   const rankFocusBar = document.getElementById("rankFocusBar");
   let rankScroll = null; // scroll positions to restore on "Return to ranking"
